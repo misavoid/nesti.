@@ -1,0 +1,49 @@
+{
+  "exportedAt" : "2026-08-23T12:00:00Z",
+  "id" : "421C47D7-91A1-4EA9-A70B-7DBE85ED149E",
+  "metadata" : {
+    "generator" : "nesti. sample"
+  },
+  "name" : "Starter Home",
+  "rooms" : [
+    {
+      "icon" : "shower",
+      "id" : "BB069D2F-3E41-4C8C-8713-E342EF8BFCCE",
+      "name" : "Bathroom",
+      "sortOrder" : 0,
+      "tasks" : [
+        {
+          "estimatedMinutes" : 5,
+          "id" : "4B0AF557-FFDC-4512-9863-451348EC4CC7",
+          "name" : "Clean toilet",
+          "reminder" : { "enabled" : true, "hour" : 9, "minute" : 0 },
+          "schedule" : { "basis" : "completion", "days" : 4, "type" : "interval" },
+          "sortOrder" : 0
+        },
+        {
+          "estimatedMinutes" : 12,
+          "id" : "DAE2FE11-A151-4696-9D94-218C7CB5F2B7",
+          "name" : "Scrub shower",
+          "schedule" : { "days" : ["saturday"], "type" : "weekdays" },
+          "sortOrder" : 1
+        }
+      ]
+    },
+    {
+      "icon" : "fork.knife",
+      "id" : "190A61D0-E264-41FB-B743-A2AA8193A601",
+      "name" : "Kitchen",
+      "sortOrder" : 1,
+      "tasks" : [
+        {
+          "estimatedMinutes" : 10,
+          "id" : "C6D661E4-5D2A-4C1B-9450-FC8DD82B9B04",
+          "name" : "Wipe cabinet fronts",
+          "schedule" : { "day" : 1, "type" : "monthly" },
+          "sortOrder" : 0
+        }
+      ]
+    }
+  ],
+  "version" : 1
+}
