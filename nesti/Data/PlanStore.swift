@@ -102,7 +102,7 @@ enum PlanStore {
                     sortOrder: taskRecord.sortOrder,
                     schedule: taskRecord.schedule,
                     lastCompletedAt: taskRecord.lastCompletedAt,
-                    nextDueAt: taskRecord.nextDueAt ?? RecurrenceCalculator.initialDueDate(for: taskRecord.schedule),
+                    nextDueAt: taskRecord.nextDueDate ?? RecurrenceCalculator.initialDueDate(for: taskRecord.schedule),
                     reminderEnabled: taskRecord.reminder?.enabled ?? false,
                     reminderHour: taskRecord.reminder?.hour ?? 9,
                     reminderMinute: taskRecord.reminder?.minute ?? 0,
@@ -137,7 +137,7 @@ enum PlanStore {
                             sortOrder: task.sortOrder,
                             schedule: task.schedule,
                             lastCompletedAt: task.lastCompletedAt,
-                            nextDueAt: task.nextDueAt,
+                            nextDueDate: task.nextDueAt,
                             reminder: ReminderRecord(enabled: task.reminderEnabled, hour: task.reminderHour, minute: task.reminderMinute)
                         )
                     }

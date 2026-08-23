@@ -87,16 +87,16 @@ public struct TaskRecord: Codable, Identifiable, Equatable, Sendable {
     public var sortOrder: Int
     public var schedule: RecurrenceRule?
     public var lastCompletedAt: Date?
-    public var nextDueAt: Date?
+    public var nextDueDate: Date?
     public var reminder: ReminderRecord?
     public var metadata: [String: String]?
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, notes, estimatedMinutes, sortOrder, schedule, lastCompletedAt, nextDueAt, reminder, metadata
+        case id, name, notes, estimatedMinutes, sortOrder, schedule, lastCompletedAt, nextDueDate, reminder, metadata
     }
 
     private enum DecodeKeys: String, CodingKey {
-        case id, name, notes, estimatedMinutes, sortOrder, schedule, lastCompletedAt, nextDueAt, dueDate, startDate, reminder, metadata
+        case id, name, notes, estimatedMinutes, sortOrder, schedule, lastCompletedAt, nextDueDate, nextDueAt, dueDate, startDate, reminder, metadata
     }
 
     public init(
@@ -107,7 +107,7 @@ public struct TaskRecord: Codable, Identifiable, Equatable, Sendable {
         sortOrder: Int = 0,
         schedule: RecurrenceRule? = nil,
         lastCompletedAt: Date? = nil,
-        nextDueAt: Date? = nil,
+        nextDueDate: Date? = nil,
         reminder: ReminderRecord? = nil,
         metadata: [String: String]? = nil
     ) {
@@ -118,7 +118,7 @@ public struct TaskRecord: Codable, Identifiable, Equatable, Sendable {
         self.sortOrder = sortOrder
         self.schedule = schedule
         self.lastCompletedAt = lastCompletedAt
-        self.nextDueAt = nextDueAt
+        self.nextDueDate = nextDueDate
         self.reminder = reminder
         self.metadata = metadata
     }
@@ -132,12 +132,14 @@ public struct TaskRecord: Codable, Identifiable, Equatable, Sendable {
         sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
         schedule = try container.decodeIfPresent(RecurrenceRule.self, forKey: .schedule)
         lastCompletedAt = try container.decodeIfPresent(Date.self, forKey: .lastCompletedAt)
-        if let canonicalDate = try container.decodeIfPresent(Date.self, forKey: .nextDueAt) {
-            nextDueAt = canonicalDate
+        if let canonicalDate = try container.decodeIfPresent(Date.self, forKey: .nextDueDate) {
+            nextDueDate = canonicalDate
+        } else if let previousCanonicalDate = try container.decodeIfPresent(Date.self, forKey: .nextDueAt) {
+            nextDueDate = previousCanonicalDate
         } else if let dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate) {
-            nextDueAt = dueDate
+            nextDueDate = dueDate
         } else {
-            nextDueAt = try container.decodeIfPresent(Date.self, forKey: .startDate)
+            nextDueDate = try container.decodeIfPresent(Date.self, forKey: .startDate)
         }
         reminder = try container.decodeIfPresent(ReminderRecord.self, forKey: .reminder)
         metadata = try container.decodeIfPresent([String: String].self, forKey: .metadata)

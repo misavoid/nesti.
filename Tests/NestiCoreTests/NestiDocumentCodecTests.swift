@@ -92,17 +92,19 @@ final class NestiDocumentCodecTests: XCTestCase {
     func testDecodesStaggeredDateOnlyFieldsAndAliases() throws {
         let json = """
         {"version":1,"name":"Home","rooms":[{"name":"Bath","tasks":[
-          {"name":"Sink","nextDueAt":"2026-08-24"},
+          {"name":"Sink","nextDueDate":"2026-08-24"},
           {"name":"Shower","dueDate":"2026-08-26"},
-          {"name":"Floor","startDate":"2026-08-28"}
+          {"name":"Floor","startDate":"2026-08-28"},
+          {"name":"Mirror","nextDueAt":"2026-08-30"}
         ]}]}
         """
 
         let document = try NestiDocumentCodec.decode(Data(json.utf8))
         let tasks = try XCTUnwrap(document.rooms.first?.tasks)
-        XCTAssertEqual(dayComponents(tasks[0].nextDueAt), DateComponents(year: 2026, month: 8, day: 24))
-        XCTAssertEqual(dayComponents(tasks[1].nextDueAt), DateComponents(year: 2026, month: 8, day: 26))
-        XCTAssertEqual(dayComponents(tasks[2].nextDueAt), DateComponents(year: 2026, month: 8, day: 28))
+        XCTAssertEqual(dayComponents(tasks[0].nextDueDate), DateComponents(year: 2026, month: 8, day: 24))
+        XCTAssertEqual(dayComponents(tasks[1].nextDueDate), DateComponents(year: 2026, month: 8, day: 26))
+        XCTAssertEqual(dayComponents(tasks[2].nextDueDate), DateComponents(year: 2026, month: 8, day: 28))
+        XCTAssertEqual(dayComponents(tasks[3].nextDueDate), DateComponents(year: 2026, month: 8, day: 30))
     }
 
     private func dayComponents(_ date: Date?) -> DateComponents {
