@@ -12,6 +12,7 @@ struct TaskEditorView: View {
     @State private var estimatedMinutes: Int?
     @State private var selectedRoomID: UUID?
     @State private var schedule: RecurrenceRule?
+    @State private var nextDueAt: Date
     @State private var reminderEnabled: Bool
     @State private var reminderTime: Date
     @State private var showingSchedule = false
@@ -23,6 +24,7 @@ struct TaskEditorView: View {
         _estimatedMinutes = State(initialValue: task?.estimatedMinutes)
         _selectedRoomID = State(initialValue: task?.room?.id ?? initialRoom?.id)
         _schedule = State(initialValue: task?.schedule)
+        _nextDueAt = State(initialValue: task?.nextDueAt ?? RecurrenceCalculator.initialDueDate(for: task?.schedule))
         _reminderEnabled = State(initialValue: task?.reminderEnabled ?? false)
         var components = DateComponents()
         components.hour = task?.reminderHour ?? 9
@@ -47,6 +49,7 @@ struct TaskEditorView: View {
                         LabeledContent("Repeat", value: schedule?.summary ?? "One-off")
                     }
                     .foregroundStyle(.primary)
+                    DatePicker("Next due", selection: $nextDueAt, displayedComponents: .date)
                 }
 
                 Section("Reminder") {
@@ -74,6 +77,10 @@ struct TaskEditorView: View {
                 }
             }
             .sheet(isPresented: $showingSchedule) { ScheduleEditorView(schedule: $schedule) }
+            .onChange(of: schedule) { previous, current in
+                guard previous != current else { return }
+                nextDueAt = RecurrenceCalculator.initialDueDate(for: current)
+            }
         }
     }
 
@@ -89,6 +96,7 @@ struct TaskEditorView: View {
             estimatedMinutes: estimatedMinutes,
             room: room,
             schedule: schedule,
+            nextDueAt: nextDueAt,
             reminderEnabled: reminderEnabled,
             reminderHour: time.hour ?? 9,
             reminderMinute: time.minute ?? 0,

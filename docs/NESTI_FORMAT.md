@@ -35,9 +35,21 @@ Each task contains:
 - `sortOrder`: integer
 - `schedule`: optional recurrence object
 - `lastCompletedAt`: optional ISO-8601 timestamp
-- `nextDueAt`: optional ISO-8601 timestamp; importers may recalculate it
+- `nextDueAt`: optional ISO-8601 timestamp or local `YYYY-MM-DD` date for the task's first due date
 - `reminder`: optional object with `enabled`, `hour` (0-23), and `minute` (0-59)
 - `metadata`: optional free-form string map for forward-compatible producer data
+
+When `nextDueAt` is omitted, nesti. derives the initial due date from the recurrence rule. Set it on each task to distribute a newly imported plan over time:
+
+```json
+{
+  "name": "Clean shower",
+  "nextDueAt": "2026-08-26",
+  "schedule": { "type": "interval", "days": 7 }
+}
+```
+
+Writers should emit `nextDueAt`. For compatibility with generated plans, readers also accept `dueDate` and `startDate` as aliases. Exports always normalize these aliases back to `nextDueAt`.
 
 ## Recurrence
 

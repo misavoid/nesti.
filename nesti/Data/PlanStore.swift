@@ -36,13 +36,13 @@ enum PlanStore {
         estimatedMinutes: Int?,
         room: Room,
         schedule: RecurrenceRule?,
+        nextDueAt: Date,
         reminderEnabled: Bool,
         reminderHour: Int,
         reminderMinute: Int,
         in context: ModelContext
     ) {
         let model = task ?? CleaningTask(name: name, sortOrder: room.tasks.count, room: room)
-        let previousSchedule = model.schedule
         model.name = name.trimmed
         model.taskNotes = notes.trimmed
         model.estimatedMinutes = estimatedMinutes
@@ -51,9 +51,7 @@ enum PlanStore {
         model.reminderEnabled = reminderEnabled
         model.reminderHour = reminderHour
         model.reminderMinute = reminderMinute
-        if model.nextDueAt == nil || previousSchedule != schedule {
-            model.nextDueAt = RecurrenceCalculator.initialDueDate(for: schedule)
-        }
+        model.nextDueAt = Calendar.current.startOfDay(for: nextDueAt)
         if task == nil { context.insert(model) }
         try? context.save()
         NotificationScheduler.shared.replaceReminder(for: model)

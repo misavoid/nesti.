@@ -22,7 +22,31 @@ public enum NestiDocumentCodec {
     public static func decode(_ data: Data) throws -> NestiDocument {
         guard data.count <= maximumByteCount else { throw NestiDocumentError.fileTooLarge }
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+
+            let internetFormatter = ISO8601DateFormatter()
+            internetFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = internetFormatter.date(from: value) { return date }
+            internetFormatter.formatOptions = [.withInternetDateTime]
+            if let date = internetFormatter.date(from: value) { return date }
+
+            if value.count == 10 {
+                let dateFormatter = DateFormatter()
+                dateFormatter.calendar = Calendar(identifier: .gregorian)
+                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                dateFormatter.timeZone = .current
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                dateFormatter.isLenient = false
+                if let date = dateFormatter.date(from: value) { return date }
+            }
+
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Expected an ISO-8601 timestamp or YYYY-MM-DD date."
+            )
+        }
         let document: NestiDocument
         do {
             document = try decoder.decode(NestiDocument.self, from: data)

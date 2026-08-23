@@ -24,6 +24,11 @@ struct ImportPreviewView: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(task.name)
                                     if let schedule = task.schedule { Text(schedule.summary).font(.caption).foregroundStyle(.secondary) }
+                                    if let nextDueAt = task.nextDueAt {
+                                        Text("First due \(nextDueAt.formatted(date: .abbreviated, time: .omitted))")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
                             }
                         } label: {

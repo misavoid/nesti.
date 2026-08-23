@@ -95,6 +95,10 @@ public struct TaskRecord: Codable, Identifiable, Equatable, Sendable {
         case id, name, notes, estimatedMinutes, sortOrder, schedule, lastCompletedAt, nextDueAt, reminder, metadata
     }
 
+    private enum DecodeKeys: String, CodingKey {
+        case id, name, notes, estimatedMinutes, sortOrder, schedule, lastCompletedAt, nextDueAt, dueDate, startDate, reminder, metadata
+    }
+
     public init(
         id: UUID = UUID(),
         name: String,
@@ -120,7 +124,7 @@ public struct TaskRecord: Codable, Identifiable, Equatable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let container = try decoder.container(keyedBy: DecodeKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
@@ -128,7 +132,13 @@ public struct TaskRecord: Codable, Identifiable, Equatable, Sendable {
         sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
         schedule = try container.decodeIfPresent(RecurrenceRule.self, forKey: .schedule)
         lastCompletedAt = try container.decodeIfPresent(Date.self, forKey: .lastCompletedAt)
-        nextDueAt = try container.decodeIfPresent(Date.self, forKey: .nextDueAt)
+        if let canonicalDate = try container.decodeIfPresent(Date.self, forKey: .nextDueAt) {
+            nextDueAt = canonicalDate
+        } else if let dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate) {
+            nextDueAt = dueDate
+        } else {
+            nextDueAt = try container.decodeIfPresent(Date.self, forKey: .startDate)
+        }
         reminder = try container.decodeIfPresent(ReminderRecord.self, forKey: .reminder)
         metadata = try container.decodeIfPresent([String: String].self, forKey: .metadata)
     }

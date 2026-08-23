@@ -88,4 +88,24 @@ final class NestiDocumentCodecTests: XCTestCase {
             XCTAssertTrue(error.localizedDescription.contains("$.rooms[0].tasks[0].name"))
         }
     }
+
+    func testDecodesStaggeredDateOnlyFieldsAndAliases() throws {
+        let json = """
+        {"version":1,"name":"Home","rooms":[{"name":"Bath","tasks":[
+          {"name":"Sink","nextDueAt":"2026-08-24"},
+          {"name":"Shower","dueDate":"2026-08-26"},
+          {"name":"Floor","startDate":"2026-08-28"}
+        ]}]}
+        """
+
+        let document = try NestiDocumentCodec.decode(Data(json.utf8))
+        let tasks = try XCTUnwrap(document.rooms.first?.tasks)
+        XCTAssertEqual(dayComponents(tasks[0].nextDueAt), DateComponents(year: 2026, month: 8, day: 24))
+        XCTAssertEqual(dayComponents(tasks[1].nextDueAt), DateComponents(year: 2026, month: 8, day: 26))
+        XCTAssertEqual(dayComponents(tasks[2].nextDueAt), DateComponents(year: 2026, month: 8, day: 28))
+    }
+
+    private func dayComponents(_ date: Date?) -> DateComponents {
+        Calendar.current.dateComponents([.year, .month, .day], from: date ?? .distantPast)
+    }
 }
