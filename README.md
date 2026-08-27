@@ -1,12 +1,16 @@
 # nesti.
 
-`nesti.` is an offline-first iPhone, iPad, and Mac cleaning routine app built with SwiftUI and SwiftData. It organizes recurring cleaning tasks by room, highlights what is due, sends local reminders, and treats import/export as a first-class workflow.
+`nesti.` is an offline-first iPhone, iPad, and Mac cleaning routine app built with SwiftUI and SwiftData. It organizes recurring cleaning tasks by room, highlights what is due, turns daily chores into a small cleanup game, and reveals patterns in when and how you clean. Import and export remain first-class workflows.
 
 ## Screenshots
 
-| Play | Tasks | Rooms |
+| Tasks | Stats | Play |
 | --- | --- | --- |
-| <img src="docs/images/nesti-play.png" alt="The nesti. Play screen showing a 3D island and today's cleaning tasks" width="260"> | <img src="docs/images/nesti-tasks.png" alt="The nesti. task dashboard showing cleaning tasks due today" width="260"> | <img src="docs/images/nesti-rooms.png" alt="The nesti. Rooms screen showing a Kitchen with six tasks" width="260"> |
+| <img src="docs/images/nesti-tasks.png" alt="The nesti. task dashboard showing today's cleaning tasks grouped by room" width="260"> | <img src="docs/images/nesti-stats.png" alt="The nesti. Stats screen showing cleaning patterns, estimated effort, missed due dates, and streaks" width="260"> | <img src="docs/images/nesti-play.png" alt="The nesti. Play screen showing a 3D island and today's cleaning tasks" width="260"> |
+
+## Cleaning insights
+
+Stats turns local completion history into useful patterns without analytics or an account. Compare the last 30 days, 90 days, or all time to see completed and missed tasks, estimated effort, cleaning streaks, room and task rankings, daily momentum, preferred weekdays and times of day, and whether you tend to clean in one burst or spread tasks across the day.
 
 > **Tip:** Walk through your home while dictating rooms, cleaning tasks, and preferred timing to an AI assistant of your choice. Ask it to generate a `.nesti` JSON file using the template below, then import that file into nesti. to set up your complete routine at once.
 
