@@ -15,8 +15,8 @@ struct RootView: View {
             TaskDashboardView()
                 .tabItem { Label("Tasks", systemImage: "checkmark.circle") }
                 .tag(0)
-            RoomsView()
-                .tabItem { Label("Rooms", systemImage: "square.grid.2x2") }
+            StatisticsView()
+                .tabItem { Label("Stats", systemImage: "chart.bar.xaxis") }
                 .tag(1)
             CleaningGameView()
                 .tabItem { Label("Play", systemImage: "gamecontroller") }
