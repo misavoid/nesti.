@@ -14,6 +14,17 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    NavigationLink {
+                        RoomsManagementView()
+                    } label: {
+                        Label {
+                            LabeledContent("Rooms", value: rooms.count.formatted())
+                        } icon: {
+                            Image(systemName: "square.grid.2x2")
+                        }
+                    }
+                }
                 Section("Home") { TextField("Home name", text: $homeName) }
                 Section("Plan files") {
                     Button { showingImporter = true } label: { Label("Import .nesti Plan", systemImage: "square.and.arrow.down") }
