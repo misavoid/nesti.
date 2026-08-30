@@ -111,6 +111,7 @@ final class SyncCoordinator {
             SyncOutbox.ensureDefaultProfile(in: context)
             try context.save()
         } catch {
+            context.rollback()
             SyncCredentialsStore.delete(serverURL: serverURL.absoluteString, homeID: paired.homeId)
             throw error
         }
@@ -237,17 +238,42 @@ final class SyncCoordinator {
     }
 
     private func install(snapshot: SyncSnapshot, in context: ModelContext) throws {
-        for completion in try context.fetch(FetchDescriptor<CompletionRecord>()) { context.delete(completion) }
-        for task in try context.fetch(FetchDescriptor<CleaningTask>()) { context.delete(task) }
-        for room in try context.fetch(FetchDescriptor<Room>()) { context.delete(room) }
-        for profile in try context.fetch(FetchDescriptor<UserProfile>()) { context.delete(profile) }
+        try validate(snapshot: snapshot)
         UserDefaults.standard.set(snapshot.home.payload.name ?? "My Home", forKey: "homeName")
         setRevision(type: .home, id: snapshot.home.id, revision: snapshot.home.revision, in: context)
         for record in snapshot.profiles { try applySnapshot(record, type: .profile, in: context) }
         for record in snapshot.rooms { try applySnapshot(record, type: .room, in: context) }
         for record in snapshot.tasks { try applySnapshot(record, type: .task, in: context) }
         for record in snapshot.completions { try applySnapshot(record, type: .completion, in: context) }
+
+        let remoteCompletionIDs = Set(snapshot.completions.map(\.id))
+        let remoteTaskIDs = Set(snapshot.tasks.map(\.id))
+        let remoteRoomIDs = Set(snapshot.rooms.map(\.id))
+        let remoteProfileIDs = Set(snapshot.profiles.map(\.id))
+        for completion in try context.fetch(FetchDescriptor<CompletionRecord>()) where !remoteCompletionIDs.contains(completion.id) { context.delete(completion) }
+        for task in try context.fetch(FetchDescriptor<CleaningTask>()) where !remoteTaskIDs.contains(task.id) { context.delete(task) }
+        for room in try context.fetch(FetchDescriptor<Room>()) where !remoteRoomIDs.contains(room.id) { context.delete(room) }
+        for profile in try context.fetch(FetchDescriptor<UserProfile>()) where !remoteProfileIDs.contains(profile.id) { context.delete(profile) }
         if let first = snapshot.profiles.first { UserDefaults.standard.set(first.id.uuidString, forKey: "activeProfileID") }
+    }
+
+    private func validate(snapshot: SyncSnapshot) throws {
+        let profileIDs = Set(snapshot.profiles.map(\.id))
+        let roomIDs = Set(snapshot.rooms.map(\.id))
+        let taskIDs = Set(snapshot.tasks.map(\.id))
+        guard profileIDs.count == snapshot.profiles.count,
+              roomIDs.count == snapshot.rooms.count,
+              taskIDs.count == snapshot.tasks.count,
+              Set(snapshot.completions.map(\.id)).count == snapshot.completions.count else {
+            throw SyncError.malformedPayload
+        }
+        for task in snapshot.tasks {
+            guard let roomID = task.payload.roomId, roomIDs.contains(roomID) else { throw SyncError.malformedPayload }
+        }
+        for completion in snapshot.completions {
+            guard let taskID = completion.payload.taskId, taskIDs.contains(taskID) else { throw SyncError.malformedPayload }
+            if let profileID = completion.payload.profileId, !profileIDs.contains(profileID) { throw SyncError.malformedPayload }
+        }
     }
 
     private func applySnapshot(_ record: SyncSnapshotRecord, type: SyncEntityType, in context: ModelContext) throws {
