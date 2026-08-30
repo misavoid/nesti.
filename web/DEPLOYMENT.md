@@ -1,6 +1,6 @@
 # Deploy nesti. behind the shared Traefik proxy
 
-The production Compose stack serves nesti. at `https://nesti.misavoid.dev` through the Traefik instance already managed by the Virtus stack. The nesti. app container does not publish host ports; it joins Traefik's external Docker network and receives traffic on internal port `8080`.
+The production Compose stack serves nesti. at `https://nesti.misavoid.dev` through the Traefik instance already managed by the Virtus stack. A normal deployment starts the static app, nesti. sync API, one-shot migrations, and PostgreSQL without publishing the database or API directly on host ports.
 
 ## DNS
 
@@ -26,6 +26,18 @@ If the shared proxy network has a different name, create `web/.env` from `web/.e
 
 ## Start
 
+### Full stack
+
+Create three independent random secrets before the first deployment. These files are ignored by git and must be backed up through the deployment secret manager, not inside the database volume:
+
+```sh
+mkdir -p secrets
+openssl rand -base64 48 > secrets/db_owner_password
+openssl rand -base64 48 > secrets/db_api_password
+openssl rand -base64 48 > secrets/pairing_pepper
+chmod 600 secrets/*
+```
+
 Run from `web/` so Compose automatically reads its `.env` file:
 
 ```sh
@@ -41,8 +53,10 @@ Verify the app and the shared proxy:
 ```sh
 docker compose ps
 docker compose logs --tail=100 app
+docker compose logs --tail=100 migrate sync-api db
 docker logs --tail=100 virtus-traefik-1
 curl -I https://nesti.misavoid.dev/
+curl https://nesti.misavoid.dev/api/sync/v1/discovery
 ```
 
 If the hostname does not resolve, compare the private records directly:
@@ -52,4 +66,49 @@ dig @192.168.0.60 virtus.misavoid.dev A
 dig @192.168.0.60 nesti.misavoid.dev A
 ```
 
-Traefik discovers the `nesti` router through Docker labels, uses the existing `myhetznerresolver` certificate resolver, and forwards matching requests over `virtus_default`.
+Traefik discovers the `nesti` routers through Docker labels, uses the existing `myhetznerresolver` certificate resolver, and forwards static traffic to `app` and `/api/sync/v1` traffic to `sync-api` over `virtus_default`.
+
+The one-shot `migrate` service owns schema changes and provisions the least-privilege `nesti_api` database role. The `sync-api` service starts only after migrations succeed. PostgreSQL is attached only to the internal `sync-data` network and stores its files in the `nesti-db` named volume.
+
+Create the first home and a 15-minute, one-use pairing code:
+
+```sh
+docker compose run --rm sync-api node dist/admin.js create-home "My Home"
+docker compose run --rm sync-api node dist/admin.js issue-pairing-code HOME_UUID 15
+```
+
+The pairing code is sensitive until used or expired. Do not paste it into logs or issue trackers.
+
+### Static app only
+
+For a deliberately local-only host, build and start only the `app` service:
+
+```sh
+docker compose up -d --build app
+```
+
+This mode does not start migrations, the API, or PostgreSQL. Browser data remains only in IndexedDB.
+
+## Database backup and restore
+
+The named volume survives normal container replacement and `docker compose down`, but it is not a backup. Do not use `docker compose down --volumes` in production.
+
+Take encrypted, scheduled PostgreSQL dumps to storage outside the Docker host. A basic manual dump can be streamed without exposing the database port:
+
+```sh
+docker compose exec -T db pg_dump -U nesti_owner -d nesti -Fc > nesti-$(date +%F).dump
+```
+
+Restores must be tested on a separate clean stack before relying on them. Stop `sync-api`, restore with `pg_restore --clean --if-exists`, run `migrate` again, then verify readiness and a two-client sync before returning traffic. Keep the owner password, API password, and pairing pepper in the deployment secret backup; database dumps do not contain those files.
+
+## Updating sync services
+
+Back up PostgreSQL before changing the pinned major version or applying new migrations. Build and run the one-shot migration before replacing the API:
+
+```sh
+docker compose build sync-api migrate
+docker compose run --rm migrate
+docker compose up -d --no-deps sync-api
+```
+
+PostgreSQL major upgrades require an explicit `pg_upgrade` or dump/restore procedure. Never point a new major image directly at an existing volume.

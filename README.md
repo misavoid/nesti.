@@ -104,6 +104,7 @@ Identifiers and export timestamps are optional for generated files; nesti. creat
 
 - A current Node.js LTS release and npm for local development
 - Docker for production-parity builds and serving
+- PostgreSQL is supplied by Docker when the optional sync profile is enabled
 
 ## Run the native app
 
@@ -134,9 +135,20 @@ docker build -t nesti-web ./web
 docker run --rm -p 8080:8080 nesti-web
 ```
 
-The production topology is deliberately small: Astro emits static assets, Docker serves them, and all plan data stays in IndexedDB in the browser. There is no application server, account system, analytics service, or remote database. See [`web/PLAN.md`](web/PLAN.md) for the architecture, compatibility requirements, and release gates.
+The browser remains offline-first: Astro emits static assets and IndexedDB is the browser's working copy. The production Compose stack also includes a separate nesti. sync API and PostgreSQL; pairing is optional, and unpaired clients do not depend on the API. A deliberately static-only host can start just the `app` service. The stack does not add public accounts or analytics. See [`web/PLAN.md`](web/PLAN.md) and [`docs/IOS_SERVER_SYNC_PLAN.md`](docs/IOS_SERVER_SYNC_PLAN.md) for the local-only baseline and sync architecture.
 
 The production Compose stack joins the existing Virtus Traefik network for automatic HTTP-to-HTTPS redirects and Let's Encrypt certificates issued through Hetzner DNS-01 for `nesti.misavoid.dev`. See [`web/DEPLOYMENT.md`](web/DEPLOYMENT.md) for DNS, shared-network, startup, and verification steps.
+
+Run the sync server's checks independently:
+
+```sh
+npm --prefix server ci
+npm --prefix server run check
+npm --prefix server test
+npm --prefix server run build
+```
+
+The PostgreSQL repository integration suite is separate because it requires a migrated disposable database. See [`server/README.md`](server/README.md) for its environment and command.
 
 ## Structure
 
@@ -147,6 +159,7 @@ The production Compose stack joins the existing Virtus Traefik network for autom
 - `ios/nesti/Features`: SwiftUI screens grouped by workflow
 - `ios/Tests/NestiCoreTests`: portable unit tests
 - `web`: Astro browser app, IndexedDB persistence, Docker delivery, tests, and implementation plan
+- `server`: PostgreSQL-backed sync API, migrations, administration CLI, and tests
 - `docs`: repository-wide architecture and `.nesti` format specification
 
-See `docs/ARCHITECTURE.md`, `docs/NESTI_FORMAT.md`, and `web/PLAN.md` for design details.
+See `docs/ARCHITECTURE.md`, `docs/NESTI_FORMAT.md`, `docs/SYNC_PROTOCOL.md`, and `web/PLAN.md` for design details.

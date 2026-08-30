@@ -23,6 +23,10 @@ SwiftData models own rooms, tasks, and completion history. Recurrence is encoded
 
 `NotificationScheduler` owns authorization and pending notification replacement. `ImportCoordinator` reads a security-scoped URL, caps input size, decodes JSON, and produces a preview without changing the store.
 
+### Optional sync server
+
+`server` contains the separately deployed sync API and PostgreSQL migrations. The static web container never receives database credentials. PostgreSQL is authoritative for a paired home, while SwiftData and IndexedDB remain complete offline replicas. `docs/SYNC_PROTOCOL.md` defines the client/server boundary; it is intentionally separate from `.nesti` import/export.
+
 ### Features
 
 The root uses three native tabs: Tasks, Rooms, and Settings. Sheets own creation/editing. The import preview is a distinct confirmation boundary between validation and persistence.
@@ -32,5 +36,6 @@ The root uses three native tabs: Tasks, Rooms, and Settings. Sheets own creation
 - iCloud: replace the local-only model container configuration with CloudKit-compatible SwiftData configuration after auditing unique constraints and migrations.
 - Widgets: expose due-task snapshots from `PlanStore` through an App Group.
 - Shared homes: add a stable household identifier already represented by `NestiDocument.id`.
+- Self-hosted sync: follow `docs/IOS_SERVER_SYNC_PLAN.md`; keep it optional, preserve local-first writes, and use a protocol distinct from `.nesti` file import/export.
 - Statistics: completion history is normalized rather than stored only as a last-completed field.
 - File versions: dispatch decoding by top-level `version`, migrating older documents into the current in-memory schema.
