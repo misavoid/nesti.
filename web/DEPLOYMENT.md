@@ -28,7 +28,7 @@ If the shared proxy network has a different name, create `web/.env` from `web/.e
 
 ### Full stack
 
-The one-shot `init-secrets` service creates the database passwords and pairing pepper during the first deployment. They persist as read-only files in the private `nesti-secrets` named volume, which is mounted only by the services that need them; no host files or preparatory shell commands are required. Back up that volume together with the database volume.
+The one-shot `init-secrets` service creates the database passwords and pairing pepper during the first deployment. They persist as read-only files in the private `nesti-secrets` named volume, which is mounted only by the services that need them; no host files or preparatory shell commands are required. Back up that volume together with the `nesti-db-v2` database volume. The earlier pre-release `nesti-db` volume is intentionally left untouched and is no longer mounted because it may have been initialized with credentials from the former host-file setup.
 
 Run from `web/` so Compose automatically reads its `.env` file:
 
@@ -69,7 +69,7 @@ dig @192.168.0.60 nesti.misavoid.dev A
 
 Traefik discovers the `nesti` routers through Docker labels, uses the existing `myhetznerresolver` certificate resolver, and forwards static traffic to `app` and `/api/sync/v1` traffic to `sync-api` over `virtus_default`.
 
-The one-shot `init-secrets` service provisions persistent credentials, and `migrate` owns schema changes and provisions the least-privilege `nesti_api` database role. The `sync-api` service starts only after migrations succeed. PostgreSQL is attached only to the internal `sync-data` network and stores its files in the `nesti-db` named volume.
+The one-shot `init-secrets` service provisions persistent credentials, and `migrate` owns schema changes and provisions the least-privilege `nesti_api` database role. The `sync-api` service starts only after migrations succeed. PostgreSQL is attached only to the internal `sync-data` network and stores its files in the `nesti-db-v2` named volume.
 
 The normal first-run flow is available in the website under Settings. Select **Set up this server** once; the browser becomes the first authorized device and displays a 15-minute, one-use pairing code. After setup, **Pair another device** generates subsequent codes for iOS or another browser.
 
