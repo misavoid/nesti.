@@ -5,7 +5,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("creates a room and recurring task, then completes it", async ({ page }) => {
-  await expect(page.getByRole("heading", { name: "Build your cleaning rhythm" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Build a lighter routine." })).toBeVisible();
   await page.getByRole("button", { name: "Add a room" }).click();
   await page.getByRole("dialog").getByLabel("Name").fill("Kitchen");
   await page.getByRole("button", { name: "Save room" }).click();
@@ -16,6 +16,9 @@ test("creates a room and recurring task, then completes it", async ({ page }) =>
   await dialog.getByLabel("Schedule").selectOption("interval");
   await page.getByRole("button", { name: "Save task" }).click();
   await expect(page.getByText("Wipe counters", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upcoming tasks" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Room progress" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Fresh Starter" })).toBeVisible();
   await page.getByRole("button", { name: "Complete Wipe counters" }).click();
   await expect(page.getByRole("heading", { name: "You are caught up" })).toBeVisible();
 });
@@ -141,7 +144,7 @@ test("reloads the app shell while offline", async ({ page, context }, testInfo) 
   await context.setOffline(true);
   try {
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Build your cleaning rhythm" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Build a lighter routine." })).toBeVisible();
   } finally {
     await context.setOffline(false);
   }
