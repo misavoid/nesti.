@@ -56,7 +56,7 @@ enum SyncOutbox {
         let conflicts = try context.fetch(FetchDescriptor<SyncConflictModel>())
         var blockedKeys = Set<String>()
         for conflict in conflicts {
-            if conflict.reason == "missing_parent" {
+            if conflict.reason == "missing_parent" || conflict.reason == "deleted" {
                 let key = conflict.key
                 if let pending = try context.fetch(FetchDescriptor<PendingSyncMutation>(predicate: #Predicate { $0.entityKey == key })).first {
                     pending.id = UUID()

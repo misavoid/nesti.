@@ -232,6 +232,14 @@ final class SyncCoordinator {
             let key = SyncOutbox.entityKey(value.entityType, value.entityId)
             if let existing = try context.fetch(FetchDescriptor<SyncConflictModel>(predicate: #Predicate { $0.key == key })).first { context.delete(existing) }
             let mutationID = value.mutationId
+            if (value.reason == "missing_parent" || value.reason == "deleted"),
+               let pending = try context.fetch(FetchDescriptor<PendingSyncMutation>(predicate: #Predicate { $0.id == mutationID })).first {
+                pending.id = UUID()
+                pending.baseRevision = value.serverRevision
+                pending.createdAt = Date()
+                blockedKeys.remove(key)
+                continue
+            }
             if let pending = try context.fetch(FetchDescriptor<PendingSyncMutation>(predicate: #Predicate { $0.id == mutationID })).first { context.delete(pending) }
             try apply(change: SyncChange(
                 cursor: value.serverRevision,
@@ -252,7 +260,7 @@ final class SyncCoordinator {
     }
 
     private func resolveStoredConflicts(in context: ModelContext) throws {
-        for conflict in try context.fetch(FetchDescriptor<SyncConflictModel>()) where conflict.reason != "missing_parent" {
+        for conflict in try context.fetch(FetchDescriptor<SyncConflictModel>()) where conflict.reason != "missing_parent" && conflict.reason != "deleted" {
             let key = conflict.key
             if let pending = try context.fetch(FetchDescriptor<PendingSyncMutation>(predicate: #Predicate { $0.entityKey == key })).first {
                 context.delete(pending)

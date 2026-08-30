@@ -336,7 +336,7 @@ export class SyncRepository {
       return this.acknowledgement(mutation, revision);
     }
 
-    if (current?.deleted) return this.conflict(mutation, "deleted", current);
+    if (current?.deleted && current.revision !== mutation.baseRevision) return this.conflict(mutation, "deleted", current);
     const expectedRevision = current?.revision ?? "0";
     if (expectedRevision !== mutation.baseRevision) return this.conflict(mutation, "revision_mismatch", current);
     if (!mutation.payload) throw new ApiError(400, "missing_payload", "An upsert requires a payload.");

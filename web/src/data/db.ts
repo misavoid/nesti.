@@ -329,7 +329,7 @@ export async function pendingMutations(limit = 500): Promise<PendingSyncMutation
   const conflicts = await request(conflictStore.getAll()) as SyncConflict[];
   const blockedKeys = new Set<string>();
   for (const conflict of conflicts) {
-    if (conflict.reason === "missing_parent") {
+    if (conflict.reason === "missing_parent" || conflict.reason === "deleted") {
       const pending = await request(outbox.index("entityKey").get(conflict.id)) as PendingSyncMutation | undefined;
       if (pending) {
         outbox.delete(pending.id);
@@ -454,6 +454,16 @@ export async function applySyncResponse(response: SyncResponse): Promise<void> {
   }
   for (const conflict of response.conflicts) {
     const key = entityKey(conflict.entityType, conflict.entityId);
+    if (conflict.reason === "missing_parent" || conflict.reason === "deleted") {
+      const pending = await request(tx.objectStore("outbox").get(conflict.mutationId)) as PendingSyncMutation | undefined;
+      if (pending) {
+        tx.objectStore("outbox").delete(pending.id);
+        tx.objectStore("outbox").put({ ...pending, id: crypto.randomUUID(), baseRevision: conflict.serverRevision, createdAt: new Date().toISOString() });
+        tx.objectStore("conflicts").delete(key);
+        blockedKeys.delete(key);
+        continue;
+      }
+    }
     tx.objectStore("outbox").delete(conflict.mutationId);
     tx.objectStore("conflicts").delete(key);
     blockedKeys.delete(key);

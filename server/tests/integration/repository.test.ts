@@ -63,6 +63,40 @@ suite("PostgreSQL sync repository", () => {
     expect(imported.conflicts).toHaveLength(0);
     expect(imported.acknowledgements.map((item) => item.entityType)).toEqual(["room", "task"]);
 
+    const removedImport = await repository.sync(
+      { id: first.deviceId, homeId: first.homeId, name: "First Device" },
+      {
+        protocolVersion: 1,
+        cursor: imported.cursor,
+        mutations: [
+          { id: crypto.randomUUID(), entityType: "room", entityId: importedRoomID, operation: "delete", baseRevision: imported.acknowledgements[0]!.revision },
+          { id: crypto.randomUUID(), entityType: "task", entityId: importedTaskID, operation: "delete", baseRevision: imported.acknowledgements[1]!.revision }
+        ]
+      }
+    );
+    expect(removedImport.conflicts).toHaveLength(0);
+    expect(removedImport.acknowledgements.map((item) => item.entityType)).toEqual(["task", "room"]);
+
+    const resurrectedImport = await repository.sync(
+      { id: first.deviceId, homeId: first.homeId, name: "First Device" },
+      {
+        protocolVersion: 1,
+        cursor: removedImport.cursor,
+        mutations: [
+          {
+            id: crypto.randomUUID(), entityType: "task", entityId: importedTaskID, operation: "upsert", baseRevision: removedImport.acknowledgements[0]!.revision,
+            payload: { roomId: importedRoomID, name: "Imported task", notes: "", sortOrder: 0, reminder: { enabled: false, hour: 9, minute: 0 }, createdAt: "2026-08-30T12:00:00Z" }
+          },
+          {
+            id: crypto.randomUUID(), entityType: "room", entityId: importedRoomID, operation: "upsert", baseRevision: removedImport.acknowledgements[1]!.revision,
+            payload: { name: "Imported room", notes: "", icon: "door.left.hand.open", sortOrder: 0 }
+          }
+        ]
+      }
+    );
+    expect(resurrectedImport.conflicts).toHaveLength(0);
+    expect(resurrectedImport.acknowledgements.map((item) => item.entityType)).toEqual(["room", "task"]);
+
     const roomId = crypto.randomUUID();
     const mutationId = crypto.randomUUID();
     const createResponse = await repository.sync(
