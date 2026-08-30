@@ -140,13 +140,13 @@ final class SyncCoordinator {
             var hasMore = true
             var passes = 0
             while hasMore, passes < 50 {
+                try resolveStoredConflicts(in: context)
                 let pending = try SyncOutbox.pendingMutations(in: context)
                 let mutations = pending.compactMap(syncMutation)
                 let response = try await transport.sync(serverURL: serverURL, token: token, request: SyncRequest(cursor: connection.cursor, mutations: mutations))
                 try apply(response: response, connection: connection, in: context)
-                hasMore = response.hasMore || (pending.count == 500 && response.conflicts.isEmpty)
+                hasMore = response.hasMore || pending.count == 500 || !response.conflicts.isEmpty
                 passes += 1
-                if !response.conflicts.isEmpty { break }
             }
             NotificationScheduler.shared.rebuildAll(in: context)
             refreshStatus()
@@ -231,13 +231,46 @@ final class SyncCoordinator {
         for value in response.conflicts {
             let key = SyncOutbox.entityKey(value.entityType, value.entityId)
             if let existing = try context.fetch(FetchDescriptor<SyncConflictModel>(predicate: #Predicate { $0.key == key })).first { context.delete(existing) }
-            context.insert(SyncConflictModel(value: value))
+            let mutationID = value.mutationId
+            if let pending = try context.fetch(FetchDescriptor<PendingSyncMutation>(predicate: #Predicate { $0.id == mutationID })).first { context.delete(pending) }
+            try apply(change: SyncChange(
+                cursor: value.serverRevision,
+                entityType: value.entityType,
+                entityId: value.entityId,
+                operation: value.serverPayload == nil ? .delete : .upsert,
+                revision: value.serverRevision,
+                payload: value.serverPayload
+            ), in: context)
+            blockedKeys.remove(key)
         }
         for change in response.changes where !blockedKeys.contains(SyncOutbox.entityKey(change.entityType, change.entityId)) {
             try apply(change: change, in: context)
         }
         connection.cursor = response.cursor
         connection.lastSyncedAt = Date()
+        try context.save()
+    }
+
+    private func resolveStoredConflicts(in context: ModelContext) throws {
+        for conflict in try context.fetch(FetchDescriptor<SyncConflictModel>()) where conflict.reason != "missing_parent" {
+            let key = conflict.key
+            if let pending = try context.fetch(FetchDescriptor<PendingSyncMutation>(predicate: #Predicate { $0.entityKey == key })).first {
+                context.delete(pending)
+            }
+            let type = SyncEntityType(rawValue: conflict.entityTypeRaw)
+            let payload = conflict.serverPayloadData.flatMap { try? JSONDecoder().decode(SyncPayload.self, from: $0) }
+            if let type {
+                try apply(change: SyncChange(
+                    cursor: conflict.serverRevision,
+                    entityType: type,
+                    entityId: conflict.entityID,
+                    operation: payload == nil ? .delete : .upsert,
+                    revision: conflict.serverRevision,
+                    payload: payload
+                ), in: context)
+            }
+            context.delete(conflict)
+        }
         try context.save()
     }
 

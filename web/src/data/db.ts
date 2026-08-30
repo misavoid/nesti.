@@ -322,7 +322,7 @@ export async function syncState(): Promise<{ connection?: SyncConnection; pendin
 
 export async function pendingMutations(limit = 500): Promise<PendingSyncMutation[]> {
   const db = await database();
-  const tx = db.transaction(["outbox", "conflicts"], "readwrite");
+  const tx = db.transaction(allStores, "readwrite");
   const done = transactionDone(tx);
   const outbox = tx.objectStore("outbox");
   const conflictStore = tx.objectStore("conflicts");
@@ -338,7 +338,18 @@ export async function pendingMutations(limit = 500): Promise<PendingSyncMutation
         continue;
       }
     }
-    blockedKeys.add(conflict.id);
+    const pending = await request(outbox.index("entityKey").get(conflict.id)) as PendingSyncMutation | undefined;
+    if (pending) outbox.delete(pending.id);
+    const serverChange: SyncChange = {
+      cursor: conflict.serverRevision,
+      entityType: conflict.entityType,
+      entityId: conflict.entityId,
+      operation: conflict.serverPayload ? "upsert" : "delete",
+      revision: conflict.serverRevision
+    };
+    if (conflict.serverPayload) serverChange.payload = conflict.serverPayload;
+    await applyChange(tx, serverChange, new Set());
+    conflictStore.delete(conflict.id);
   }
   const mutations = await request(outbox.getAll()) as PendingSyncMutation[];
   await done;
@@ -437,13 +448,24 @@ export async function applySyncResponse(response: SyncResponse): Promise<void> {
   if (!connection) throw new Error("The browser is no longer connected to a server.");
   const existingConflicts = await request(tx.objectStore("conflicts").getAll()) as SyncConflict[];
   const blockedKeys = new Set(existingConflicts.map((conflict) => conflict.id));
-  for (const conflict of response.conflicts) blockedKeys.add(entityKey(conflict.entityType, conflict.entityId));
   for (const acknowledgement of response.acknowledgements) {
     tx.objectStore("outbox").delete(acknowledgement.mutationId);
     tx.objectStore("revisions").put({ id: entityKey(acknowledgement.entityType, acknowledgement.entityId), revision: acknowledgement.revision } satisfies SyncRevision);
   }
   for (const conflict of response.conflicts) {
-    tx.objectStore("conflicts").put({ id: entityKey(conflict.entityType, conflict.entityId), ...conflict } satisfies SyncConflict);
+    const key = entityKey(conflict.entityType, conflict.entityId);
+    tx.objectStore("outbox").delete(conflict.mutationId);
+    tx.objectStore("conflicts").delete(key);
+    blockedKeys.delete(key);
+    const serverChange: SyncChange = {
+      cursor: conflict.serverRevision,
+      entityType: conflict.entityType,
+      entityId: conflict.entityId,
+      operation: conflict.serverPayload ? "upsert" : "delete",
+      revision: conflict.serverRevision
+    };
+    if (conflict.serverPayload) serverChange.payload = conflict.serverPayload;
+    await applyChange(tx, serverChange, new Set());
   }
   for (const change of response.changes) await applyChange(tx, change, blockedKeys);
   tx.objectStore("sync").put({ ...connection, cursor: response.cursor, lastSyncedAt: new Date().toISOString() });

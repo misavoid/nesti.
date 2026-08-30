@@ -176,9 +176,8 @@ async function performSync(): Promise<void> {
         })
       }));
       await applySyncResponse(response);
-      hasMore = response.hasMore || (mutations.length === 500 && !response.conflicts.length);
+      hasMore = response.hasMore || mutations.length === 500 || response.conflicts.length > 0;
       passes += 1;
-      if (response.conflicts.length) break;
     }
     const state = await syncState();
     if (state.conflicts.length) publish({ phase: "attention", message: `${state.conflicts.length} sync conflict${state.conflicts.length === 1 ? "" : "s"}` });
