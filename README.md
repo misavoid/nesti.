@@ -1,6 +1,6 @@
 # nesti.
 
-`nesti.` is an offline-first cleaning routine project. The monorepo currently contains the iPhone, iPad, and Mac app built with SwiftUI and SwiftData, with space reserved for a future Astro web app. The native app organizes recurring cleaning tasks by room, highlights what is due, turns daily chores into a small cleanup game, and reveals patterns in when and how you clean. Import and export remain first-class workflows.
+`nesti.` is an offline-first cleaning routine project. The monorepo contains the iPhone, iPad, and Mac app built with SwiftUI and SwiftData, plus an installable Astro web app delivered as a static Docker image. The app organizes recurring cleaning tasks by room, highlights what is due, turns daily chores into a small cleanup game, and reveals patterns in when and how you clean. Import and export remain first-class workflows across platforms.
 
 ## Screenshots
 
@@ -93,12 +93,19 @@ Identifiers and export timestamps are optional for generated files; nesti. creat
 
 ## Requirements
 
+### Native app
+
 - Xcode 16 or newer
 - iOS 17 or newer
 - macOS 14 or newer for the Mac Catalyst build
 - A development team selected in Xcode for device deployment
 
-## Run
+### Web app
+
+- A current Node.js LTS release and npm for local development
+- Docker for production-parity builds and serving
+
+## Run the native app
 
 1. Open `ios/nesti.xcodeproj` in Xcode.
 2. Select the `nesti` scheme.
@@ -111,6 +118,26 @@ The portable schedule and file-format tests can also run without Xcode:
 swift test --package-path ios
 ```
 
+## Run the web app
+
+Install dependencies and start Astro:
+
+```sh
+npm --prefix web ci
+npm --prefix web run dev
+```
+
+Then open `http://localhost:4321`. To build and serve the production image instead:
+
+```sh
+docker build -t nesti-web ./web
+docker run --rm -p 8080:8080 nesti-web
+```
+
+The production topology is deliberately small: Astro emits static assets, Docker serves them, and all plan data stays in IndexedDB in the browser. There is no application server, account system, analytics service, or remote database. See [`web/PLAN.md`](web/PLAN.md) for the architecture, compatibility requirements, and release gates.
+
+The production Compose stack joins the existing Virtus Traefik network for automatic HTTP-to-HTTPS redirects and Let's Encrypt certificates issued through Hetzner DNS-01 for `nesti.misavoid.dev`. See [`web/DEPLOYMENT.md`](web/DEPLOYMENT.md) for DNS, shared-network, startup, and verification steps.
+
 ## Structure
 
 - `ios`: native app, widget extension, Swift package, tests, tools, samples, and assets
@@ -119,7 +146,7 @@ swift test --package-path ios
 - `ios/nesti/Services`: notifications and import/export support
 - `ios/nesti/Features`: SwiftUI screens grouped by workflow
 - `ios/Tests/NestiCoreTests`: portable unit tests
-- `web`: reserved for the future Astro and Docker application
+- `web`: Astro browser app, IndexedDB persistence, Docker delivery, tests, and implementation plan
 - `docs`: repository-wide architecture and `.nesti` format specification
 
-See `docs/ARCHITECTURE.md` and `docs/NESTI_FORMAT.md` for design details.
+See `docs/ARCHITECTURE.md`, `docs/NESTI_FORMAT.md`, and `web/PLAN.md` for design details.

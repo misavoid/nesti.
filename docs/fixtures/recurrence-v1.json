@@ -1,0 +1,33 @@
+[
+  {
+    "name": "completion interval",
+    "rule": { "type": "interval", "days": 7, "basis": "completion" },
+    "reference": "2026-08-30",
+    "expected": "2026-09-06"
+  },
+  {
+    "name": "missed scheduled interval",
+    "rule": { "type": "interval", "days": 4, "basis": "scheduled" },
+    "reference": "2026-08-30",
+    "lastScheduled": "2026-08-20",
+    "expected": "2026-09-01"
+  },
+  {
+    "name": "selected weekdays",
+    "rule": { "type": "weekdays", "days": ["monday", "thursday"] },
+    "reference": "2026-08-30",
+    "expected": "2026-08-31"
+  },
+  {
+    "name": "leap-year completion month",
+    "rule": { "type": "monthly", "intervalMonths": 1, "basis": "completion" },
+    "reference": "2024-01-31",
+    "expected": "2024-02-29"
+  },
+  {
+    "name": "scheduled calendar month",
+    "rule": { "type": "monthly", "day": 31, "intervalMonths": 1, "basis": "scheduled" },
+    "reference": "2026-02-28",
+    "expected": "2026-03-31"
+  }
+]

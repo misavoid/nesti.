@@ -1,4 +1,5 @@
 .DS_Store
+.idea/
 .build/
 .swiftpm/
 DerivedData/
@@ -10,3 +11,10 @@ xcuserdata/
 *.ipa
 *.dSYM.zip
 *.dSYM
+web/node_modules/
+web/dist/
+web/.astro/
+web/test-results/
+web/playwright-report/
+web/.env
+web/.env.local

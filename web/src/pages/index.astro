@@ -1,0 +1,98 @@
+---
+import "../styles/global.css";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#147d64" />
+    <meta name="description" content="nesti. is an offline-first cleaning routine." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <title>nesti.</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#tasks" aria-label="nesti. home">
+          <img src="/icons/icon-192.png" alt="" />
+          <span>nesti.</span>
+        </a>
+        <nav class="nav-list">
+          <button class="nav-item active" data-view="tasks"><i data-lucide="circle-check-big"></i><span>Tasks</span><b id="due-badge" hidden>0</b></button>
+          <button class="nav-item" data-view="stats"><i data-lucide="chart-no-axes-column-increasing"></i><span>Stats</span></button>
+          <button class="nav-item" data-view="play"><i data-lucide="gamepad-2"></i><span>Play</span></button>
+          <button class="nav-item" data-view="settings"><i data-lucide="settings"></i><span>Settings</span></button>
+        </nav>
+        <div class="privacy-note"><i data-lucide="hard-drive"></i><span>Saved on this device</span></div>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="home-name">My Home</p>
+            <h1 id="page-title">Tasks</h1>
+          </div>
+          <div class="topbar-actions" id="topbar-actions"></div>
+        </header>
+        <main id="app-content" tabindex="-1" aria-live="polite">
+          <div class="loading"><span></span><span></span><span></span><p>Opening your plan</p></div>
+        </main>
+      </div>
+
+      <nav class="bottom-nav" aria-label="Primary navigation">
+        <button class="nav-item active" data-view="tasks"><i data-lucide="circle-check-big"></i><span>Tasks</span></button>
+        <button class="nav-item" data-view="stats"><i data-lucide="chart-no-axes-column-increasing"></i><span>Stats</span></button>
+        <button class="nav-item" data-view="play"><i data-lucide="gamepad-2"></i><span>Play</span></button>
+        <button class="nav-item" data-view="settings"><i data-lucide="settings"></i><span>Settings</span></button>
+      </nav>
+    </div>
+
+    <dialog id="room-dialog" class="form-dialog">
+      <form method="dialog" id="room-form">
+        <input type="hidden" name="id" />
+        <header><div><p class="eyebrow">Room details</p><h2 id="room-dialog-title">New room</h2></div><button class="icon-button" value="cancel" aria-label="Close"><i data-lucide="x"></i></button></header>
+        <label>Name<input name="name" required maxlength="120" autocomplete="off" /></label>
+        <label>Icon<select name="icon"><option value="door.left.hand.open">Door</option><option value="bed.double">Bedroom</option><option value="shower">Bathroom</option><option value="fork.knife">Kitchen</option><option value="sofa">Living room</option><option value="washer">Laundry</option><option value="square.grid.2x2">Other</option></select></label>
+        <label>Notes<textarea name="notes" maxlength="1000" rows="3"></textarea></label>
+        <footer><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="save" data-submit-room>Save room</button></footer>
+      </form>
+    </dialog>
+
+    <dialog id="task-dialog" class="form-dialog wide">
+      <form method="dialog" id="task-form">
+        <input type="hidden" name="id" />
+        <header><div><p class="eyebrow">Cleaning task</p><h2 id="task-dialog-title">New task</h2></div><button class="icon-button" value="cancel" aria-label="Close"><i data-lucide="x"></i></button></header>
+        <div class="form-grid">
+          <label class="span-2">Name<input name="name" required maxlength="160" autocomplete="off" /></label>
+          <label>Room<select name="roomId" required></select></label>
+          <label>Estimate (minutes)<input name="estimatedMinutes" type="number" min="1" max="1440" inputmode="numeric" /></label>
+          <label>First due date<input name="nextDueDate" type="date" required /></label>
+          <label>Schedule<select name="scheduleType"><option value="none">One-off</option><option value="interval">Every few days</option><option value="weekdays">Selected weekdays</option><option value="monthly">Every few months</option></select></label>
+          <div class="schedule-fields span-2" id="schedule-fields"></div>
+          <label class="span-2">Notes<textarea name="notes" maxlength="2000" rows="3"></textarea></label>
+          <label class="toggle-row span-2"><input name="reminderEnabled" type="checkbox" /><span>Reminder</span><input name="reminderTime" type="time" value="09:00" aria-label="Reminder time" /></label>
+        </div>
+        <footer><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="save" data-submit-task>Save task</button></footer>
+      </form>
+    </dialog>
+
+    <dialog id="import-dialog" class="form-dialog">
+      <form method="dialog">
+        <header><div><p class="eyebrow">Review before saving</p><h2>Import plan</h2></div><button class="icon-button" value="cancel" aria-label="Close"><i data-lucide="x"></i></button></header>
+        <div id="import-summary"></div>
+        <footer><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="import" id="confirm-import">Append plan</button></footer>
+      </form>
+    </dialog>
+
+    <input id="file-input" type="file" accept=".nesti,application/json,application/vnd.nesti+json" hidden />
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script>
+      import { startApp } from "../features/app";
+      startApp();
+    </script>
+  </body>
+</html>

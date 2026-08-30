@@ -1,0 +1,12 @@
+node_modules
+dist
+.astro
+test-results
+playwright-report
+npm-debug.log*
+.git
+.idea
+.env
+.env.local
+.DS_Store
+*.iml

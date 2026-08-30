@@ -1,0 +1,29 @@
+name: nesti
+
+services:
+  app:
+    build: .
+    expose:
+      - "8080"
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.nesti.loadbalancer.server.port=8080
+      - traefik.http.routers.nesti.rule=Host(`nesti.misavoid.dev`)
+      - traefik.http.routers.nesti.entrypoints=websecure
+      - traefik.http.routers.nesti.tls.certresolver=myhetznerresolver
+      - traefik.docker.network=${TRAEFIK_NETWORK:-virtus_default}
+    networks:
+      - traefik
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+networks:
+  traefik:
+    name: ${TRAEFIK_NETWORK:-virtus_default}
+    external: true

@@ -1,0 +1,28 @@
+{
+  "name": "nesti-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "check": "astro check && tsc --noEmit",
+    "test": "vitest run",
+    "test:browser": "playwright test"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.10",
+    "astro": "^7.2.9",
+    "lucide": "^0.468.0",
+    "three": "^0.180.0",
+    "typescript": "^5.9.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^26.4.0",
+    "@types/three": "^0.180.0",
+    "serve": "^14.2.6",
+    "vitest": "^3.2.4"
+  }
+}
