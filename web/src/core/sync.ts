@@ -81,3 +81,9 @@ export interface SyncResponse {
 }
 
 export const entityKey = (type: SyncEntityType, id: string): string => `${type}:${id}`;
+
+export function mutationApplicationPriority(mutation: Pick<PendingSyncMutation, "entityType" | "operation">): number {
+  const upsertOrder: Record<SyncEntityType, number> = { home: 0, profile: 1, room: 2, task: 3, completion: 4 };
+  const deleteOrder: Record<SyncEntityType, number> = { completion: 5, task: 6, room: 7, profile: 8, home: 9 };
+  return mutation.operation === "upsert" ? upsertOrder[mutation.entityType] : deleteOrder[mutation.entityType];
+}

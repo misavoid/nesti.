@@ -125,7 +125,6 @@ final class SyncCoordinator {
             refreshStatus()
             return
         }
-        guard conflictCount == 0 else { refreshStatus(); return }
         isRunning = true
         phase = .syncing
         message = "Saving to PostgreSQL"
@@ -136,9 +135,7 @@ final class SyncCoordinator {
             var hasMore = true
             var passes = 0
             while hasMore, passes < 50 {
-                var descriptor = FetchDescriptor<PendingSyncMutation>(sortBy: [SortDescriptor(\.createdAt)])
-                descriptor.fetchLimit = 500
-                let pending = try context.fetch(descriptor)
+                let pending = try SyncOutbox.pendingMutations(in: context)
                 let mutations = pending.compactMap(syncMutation)
                 let response = try await transport.sync(serverURL: serverURL, token: token, request: SyncRequest(cursor: connection.cursor, mutations: mutations))
                 try apply(response: response, connection: connection, in: context)
@@ -217,7 +214,8 @@ final class SyncCoordinator {
     }
 
     private func apply(response: SyncResponse, connection: SyncConnectionModel, in context: ModelContext) throws {
-        let blockedKeys = Set(response.conflicts.map { SyncOutbox.entityKey($0.entityType, $0.entityId) })
+        var blockedKeys = Set(try context.fetch(FetchDescriptor<SyncConflictModel>()).map(\.key))
+        blockedKeys.formUnion(response.conflicts.map { SyncOutbox.entityKey($0.entityType, $0.entityId) })
         for acknowledgement in response.acknowledgements {
             let mutationID = acknowledgement.mutationId
             if let pending = try context.fetch(FetchDescriptor<PendingSyncMutation>(predicate: #Predicate { $0.id == mutationID })).first {

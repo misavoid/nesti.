@@ -147,10 +147,6 @@ async function performSync(): Promise<void> {
     publish({ phase: "offline", message: initial.pending ? `${initial.pending} changes waiting for server` : "Offline copy is available" });
     return;
   }
-  if (initial.conflicts.length) {
-    publish({ phase: "attention", message: `${initial.conflicts.length} sync conflict${initial.conflicts.length === 1 ? "" : "s"}` });
-    return;
-  }
   publish({ phase: "syncing", message: "Saving to PostgreSQL" });
   try {
     let hasMore = true;

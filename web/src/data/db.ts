@@ -1,7 +1,7 @@
 import { dateKey, nextDueDate } from "../core/dates";
 import { normalizeImportedDueDate } from "../core/codec";
 import type { AppSnapshot, CompletionRecord, NestiDocument, ProfileRecord, RoomRecord, SettingsRecord, TaskRecord } from "../core/types";
-import { entityKey, type PendingSyncMutation, type ServerSnapshot, type SyncChange, type SyncConflict, type SyncConnection, type SyncEntityType, type SyncPayload, type SyncResponse, type SyncRevision } from "../core/sync";
+import { entityKey, mutationApplicationPriority, type PendingSyncMutation, type ServerSnapshot, type SyncChange, type SyncConflict, type SyncConnection, type SyncEntityType, type SyncPayload, type SyncResponse, type SyncRevision } from "../core/sync";
 
 const DB_NAME = "nesti";
 const DB_VERSION = 2;
@@ -322,9 +322,32 @@ export async function syncState(): Promise<{ connection?: SyncConnection; pendin
 
 export async function pendingMutations(limit = 500): Promise<PendingSyncMutation[]> {
   const db = await database();
-  const tx = db.transaction("outbox", "readonly");
-  const mutations = await request(tx.objectStore("outbox").index("createdAt").getAll(undefined, limit)) as PendingSyncMutation[];
-  return mutations.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const tx = db.transaction(["outbox", "conflicts"], "readwrite");
+  const done = transactionDone(tx);
+  const outbox = tx.objectStore("outbox");
+  const conflictStore = tx.objectStore("conflicts");
+  const conflicts = await request(conflictStore.getAll()) as SyncConflict[];
+  const blockedKeys = new Set<string>();
+  for (const conflict of conflicts) {
+    if (conflict.reason === "missing_parent") {
+      const pending = await request(outbox.index("entityKey").get(conflict.id)) as PendingSyncMutation | undefined;
+      if (pending) {
+        outbox.delete(pending.id);
+        outbox.put({ ...pending, id: crypto.randomUUID(), baseRevision: conflict.serverRevision, createdAt: new Date().toISOString() });
+        conflictStore.delete(conflict.id);
+        continue;
+      }
+    }
+    blockedKeys.add(conflict.id);
+  }
+  const mutations = await request(outbox.getAll()) as PendingSyncMutation[];
+  await done;
+  return mutations
+    .filter((mutation) => !blockedKeys.has(mutation.entityKey))
+    .sort((left, right) => mutationApplicationPriority(left) - mutationApplicationPriority(right)
+      || left.createdAt.localeCompare(right.createdAt)
+      || left.id.localeCompare(right.id))
+    .slice(0, limit);
 }
 
 export async function connectToSnapshot(
@@ -404,7 +427,9 @@ export async function applySyncResponse(response: SyncResponse): Promise<void> {
   const done = transactionDone(tx);
   const connection = await request(tx.objectStore("sync").get("connection")) as SyncConnection | undefined;
   if (!connection) throw new Error("The browser is no longer connected to a server.");
-  const blockedKeys = new Set(response.conflicts.map((conflict) => entityKey(conflict.entityType, conflict.entityId)));
+  const existingConflicts = await request(tx.objectStore("conflicts").getAll()) as SyncConflict[];
+  const blockedKeys = new Set(existingConflicts.map((conflict) => conflict.id));
+  for (const conflict of response.conflicts) blockedKeys.add(entityKey(conflict.entityType, conflict.entityId));
   for (const acknowledgement of response.acknowledgements) {
     tx.objectStore("outbox").delete(acknowledgement.mutationId);
     tx.objectStore("revisions").put({ id: entityKey(acknowledgement.entityType, acknowledgement.entityId), revision: acknowledgement.revision } satisfies SyncRevision);

@@ -100,6 +100,12 @@ public struct SyncRequest: Codable, Equatable, Sendable {
     }
 }
 
+public func syncMutationApplicationPriority(entityType: SyncEntityType, operation: SyncOperation) -> Int {
+    let upsertOrder: [SyncEntityType: Int] = [.home: 0, .profile: 1, .room: 2, .task: 3, .completion: 4]
+    let deleteOrder: [SyncEntityType: Int] = [.completion: 5, .task: 6, .room: 7, .profile: 8, .home: 9]
+    return operation == .upsert ? upsertOrder[entityType]! : deleteOrder[entityType]!
+}
+
 public struct SyncAcknowledgement: Codable, Equatable, Sendable {
     public var mutationId: UUID
     public var entityType: SyncEntityType

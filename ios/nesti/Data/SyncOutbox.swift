@@ -52,6 +52,36 @@ enum SyncOutbox {
         didSave()
     }
 
+    static func pendingMutations(limit: Int = 500, in context: ModelContext) throws -> [PendingSyncMutation] {
+        let conflicts = try context.fetch(FetchDescriptor<SyncConflictModel>())
+        var blockedKeys = Set<String>()
+        for conflict in conflicts {
+            if conflict.reason == "missing_parent" {
+                let key = conflict.key
+                if let pending = try context.fetch(FetchDescriptor<PendingSyncMutation>(predicate: #Predicate { $0.entityKey == key })).first {
+                    pending.id = UUID()
+                    pending.baseRevision = conflict.serverRevision
+                    pending.createdAt = Date()
+                    context.delete(conflict)
+                    continue
+                }
+            }
+            blockedKeys.insert(conflict.key)
+        }
+        try context.save()
+
+        let pending = try context.fetch(FetchDescriptor<PendingSyncMutation>())
+            .filter { !blockedKeys.contains($0.entityKey) }
+            .sorted { left, right in
+                let leftPriority = priority(of: left)
+                let rightPriority = priority(of: right)
+                if leftPriority != rightPriority { return leftPriority < rightPriority }
+                if left.createdAt != right.createdAt { return left.createdAt < right.createdAt }
+                return left.id.uuidString < right.id.uuidString
+            }
+        return Array(pending.prefix(limit))
+    }
+
     static func didSave() {
         NotificationCenter.default.post(name: localChangeNotification, object: nil)
     }
@@ -105,6 +135,12 @@ enum SyncOutbox {
         formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
+    }
+
+    private static func priority(of mutation: PendingSyncMutation) -> Int {
+        guard let entityType = SyncEntityType(rawValue: mutation.entityTypeRaw),
+              let operation = SyncOperation(rawValue: mutation.operationRaw) else { return Int.max }
+        return syncMutationApplicationPriority(entityType: entityType, operation: operation)
     }
 }
 

@@ -81,6 +81,12 @@ export interface SyncRequest {
   mutations: SyncMutation[];
 }
 
+export function mutationApplicationPriority(mutation: Pick<SyncMutation, "entityType" | "operation">): number {
+  const upsertOrder: Record<EntityType, number> = { home: 0, profile: 1, room: 2, task: 3, completion: 4 };
+  const deleteOrder: Record<EntityType, number> = { completion: 5, task: 6, room: 7, profile: 8, home: 9 };
+  return mutation.operation === "upsert" ? upsertOrder[mutation.entityType] : deleteOrder[mutation.entityType];
+}
+
 export interface MutationAcknowledgement {
   mutationId: string;
   entityType: EntityType;

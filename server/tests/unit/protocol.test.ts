@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBootstrapRequest, parsePairRequest, parseSyncRequest, ProtocolError } from "../../src/protocol.js";
+import { mutationApplicationPriority, parseBootstrapRequest, parsePairRequest, parseSyncRequest, ProtocolError } from "../../src/protocol.js";
 
 const taskPayload = {
   roomId: "13a82f7a-2029-4e13-8a5d-40ea958dba88",
@@ -80,5 +80,22 @@ describe("sync protocol validation", () => {
     });
     expect(request.mutations[0]?.payload).toEqual({ name: "Alex", color: "#147d64", sortOrder: 0 });
     expect(request.mutations[1]?.payload).toMatchObject({ profileId });
+  });
+
+  it("orders parent upserts before children and child deletes before parents", () => {
+    const values = [
+      { entityType: "task", operation: "delete" },
+      { entityType: "completion", operation: "upsert" },
+      { entityType: "room", operation: "upsert" },
+      { entityType: "completion", operation: "delete" },
+      { entityType: "task", operation: "upsert" }
+    ] as const;
+    expect([...values].sort((a, b) => mutationApplicationPriority(a) - mutationApplicationPriority(b))).toEqual([
+      { entityType: "room", operation: "upsert" },
+      { entityType: "task", operation: "upsert" },
+      { entityType: "completion", operation: "upsert" },
+      { entityType: "completion", operation: "delete" },
+      { entityType: "task", operation: "delete" }
+    ]);
   });
 });

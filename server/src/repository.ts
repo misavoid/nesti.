@@ -5,6 +5,7 @@ import { withTransaction } from "./database.js";
 import { ApiError } from "./errors.js";
 import {
   MAX_SYNC_CHANGES,
+  mutationApplicationPriority,
   SYNC_PROTOCOL_VERSION,
   type CompletionPayload,
   type EntityPayload,
@@ -216,7 +217,8 @@ export class SyncRepository {
 
       const acknowledgements: MutationAcknowledgement[] = [];
       const conflicts: MutationConflict[] = [];
-      for (const mutation of request.mutations) {
+      const orderedMutations = [...request.mutations].sort((left, right) => mutationApplicationPriority(left) - mutationApplicationPriority(right));
+      for (const mutation of orderedMutations) {
         const existing = await client.query<{ result: StoredMutationResult }>(
           "SELECT result FROM applied_mutations WHERE home_id = $1 AND mutation_id = $2",
           [device.homeId, mutation.id]

@@ -37,4 +37,19 @@ final class SyncProtocolTests: XCTestCase {
         XCTAssertEqual(snapshot.profiles.first?.payload.name, "Alex")
         XCTAssertEqual(snapshot.completions.first?.payload.profileId?.uuidString.lowercased(), "13a82f7a-2029-4e13-8a5d-40ea958dba88")
     }
+
+    func testMutationOrderingPutsParentsBeforeChildrenAndChildDeletesFirst() {
+        XCTAssertLessThan(
+            syncMutationApplicationPriority(entityType: .room, operation: .upsert),
+            syncMutationApplicationPriority(entityType: .task, operation: .upsert)
+        )
+        XCTAssertLessThan(
+            syncMutationApplicationPriority(entityType: .completion, operation: .delete),
+            syncMutationApplicationPriority(entityType: .task, operation: .delete)
+        )
+        XCTAssertLessThan(
+            syncMutationApplicationPriority(entityType: .completion, operation: .upsert),
+            syncMutationApplicationPriority(entityType: .completion, operation: .delete)
+        )
+    }
 }

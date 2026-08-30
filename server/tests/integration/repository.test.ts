@@ -33,6 +33,36 @@ suite("PostgreSQL sync repository", () => {
     const first = await repository.pair(firstCode.code, "First Device");
     await expect(repository.pair(firstCode.code, "Reused Code")).rejects.toMatchObject({ code: "invalid_pairing_code" });
 
+    const importedRoomID = crypto.randomUUID();
+    const importedTaskID = crypto.randomUUID();
+    const imported = await repository.sync(
+      { id: first.deviceId, homeId: first.homeId, name: "First Device" },
+      {
+        protocolVersion: 1,
+        cursor: first.snapshot.cursor,
+        mutations: [
+          {
+            id: crypto.randomUUID(),
+            entityType: "task",
+            entityId: importedTaskID,
+            operation: "upsert",
+            baseRevision: "0",
+            payload: { roomId: importedRoomID, name: "Imported task", notes: "", sortOrder: 0, reminder: { enabled: false, hour: 9, minute: 0 }, createdAt: "2026-08-30T12:00:00Z" }
+          },
+          {
+            id: crypto.randomUUID(),
+            entityType: "room",
+            entityId: importedRoomID,
+            operation: "upsert",
+            baseRevision: "0",
+            payload: { name: "Imported room", notes: "", icon: "door.left.hand.open", sortOrder: 0 }
+          }
+        ]
+      }
+    );
+    expect(imported.conflicts).toHaveLength(0);
+    expect(imported.acknowledgements.map((item) => item.entityType)).toEqual(["room", "task"]);
+
     const roomId = crypto.randomUUID();
     const mutationId = crypto.randomUUID();
     const createResponse = await repository.sync(
