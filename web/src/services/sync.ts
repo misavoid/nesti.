@@ -15,6 +15,7 @@ let activeReconcile: Promise<void> | undefined;
 let retryTimer: number | undefined;
 let serviceStarted = false;
 const listeners = new Set<(status: RuntimeSyncStatus) => void>();
+const dataListeners = new Set<() => void>();
 
 function publish(status: RuntimeSyncStatus): void {
   runtimeStatus = status;
@@ -25,6 +26,15 @@ export const currentSyncStatus = (): RuntimeSyncStatus => runtimeStatus;
 export function observeSyncStatus(listener: (status: RuntimeSyncStatus) => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+export function observeSyncedData(listener: () => void): () => void {
+  dataListeners.add(listener);
+  return () => dataListeners.delete(listener);
+}
+
+function publishSyncedData(): void {
+  for (const listener of dataListeners) listener();
 }
 
 function api(serverUrl: string, path: string): string {
@@ -130,6 +140,7 @@ async function performReconcile(homeName: string): Promise<void> {
       }
     }
     await connectToSnapshot({ ...connection, cursor: remote.cursor }, remote, "use-server");
+    publishSyncedData();
     publish({ phase: "synced", message: `Loaded from PostgreSQL on ${connection.serverName}` });
   }
 }
@@ -162,6 +173,7 @@ async function performSync(): Promise<void> {
   try {
     let hasMore = true;
     let passes = 0;
+    let receivedRemoteData = false;
     while (hasMore && passes < 50) {
       const state = await syncState();
       if (!state.connection) return;
@@ -176,9 +188,11 @@ async function performSync(): Promise<void> {
         })
       }));
       await applySyncResponse(response);
+      receivedRemoteData ||= response.changes.length > 0 || response.conflicts.length > 0;
       hasMore = response.hasMore || mutations.length === 500 || response.conflicts.length > 0;
       passes += 1;
     }
+    if (receivedRemoteData) publishSyncedData();
     const state = await syncState();
     if (state.conflicts.length) publish({ phase: "attention", message: `${state.conflicts.length} sync conflict${state.conflicts.length === 1 ? "" : "s"}` });
     else if (state.pending) publish({ phase: "pending", message: `${state.pending} changes waiting for server` });
@@ -213,8 +227,8 @@ export async function startSyncService(homeName = "My Home"): Promise<void> {
     window.addEventListener("online", () => void reconcileHostedCopy(homeName).catch(() => undefined));
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") void reconcileHostedCopy(homeName).catch(() => undefined); });
     window.setInterval(() => {
-      if (document.visibilityState === "visible" && navigator.onLine) void reconcileHostedCopy(homeName).catch(() => undefined);
-    }, 30_000);
+      if (document.visibilityState === "visible" && navigator.onLine) void syncNow().catch(() => undefined);
+    }, 5_000);
   }
   try {
     await reconcileHostedCopy(homeName);

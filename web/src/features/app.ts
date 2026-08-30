@@ -11,7 +11,7 @@ import type { SyncConflict, SyncConnection } from "../core/sync";
 import { completeTask, deleteProfile, deleteRoom, deleteTask, importDocument, resetDatabase, resolveConflict, saveProfile, saveRoom, saveSettings, saveTask, selectProfile, snapshot, syncState, undoCompletion } from "../data/db";
 import { downloadPlan, readPlan } from "../services/files";
 import { notifyDueTasks } from "../services/notifications";
-import { currentSyncStatus, disconnectFromServer, observeSyncStatus, reconcileHostedCopy, scheduleSync, startSyncService, syncNow, type RuntimeSyncStatus } from "../services/sync";
+import { currentSyncStatus, disconnectFromServer, observeSyncedData, observeSyncStatus, reconcileHostedCopy, scheduleSync, startSyncService, syncNow, type RuntimeSyncStatus } from "../services/sync";
 
 const iconSet = { Bell, BellOff, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronRight, CircleAlert, CircleCheck, CircleCheckBig, Clock, Cloud, CloudOff, Database, DoorOpen, Download, FileJson, Flame, Gamepad2, HardDrive, ListTodo, MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Settings, ShieldCheck, Sparkles, Timer, Trash2, Unplug, Upload, UserRound, Users, X };
 type View = "tasks" | "stats" | "play" | "settings";
@@ -37,6 +37,7 @@ export async function startApp(): Promise<void> {
     syncRuntime = status;
     void syncState().then((state) => { syncDetails = state; updateSyncIndicators(); if (view === "settings") render(); });
   });
+  observeSyncedData(() => { void refresh(undefined, false); });
   await requestPersistentStorage();
   await startSyncService(data.settings.homeName);
   [data, syncDetails] = await Promise.all([snapshot(), syncState()]);

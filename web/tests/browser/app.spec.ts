@@ -53,10 +53,20 @@ test("shows when browser data is committed to PostgreSQL", async ({ page }, test
     protocolVersion: 1, deviceToken: "a".repeat(43), deviceId: "c86c28e1-f104-49a0-b780-5daec591b794", homeId,
     snapshot: { protocolVersion: 1, cursor: "2", home: { id: homeId, revision: "1", payload: { name: "Synced Home" } }, profiles: [{ id: profileId, revision: "2", payload: { name: "Alex", color: "#147d64", sortOrder: 0 } }], rooms: [], tasks: [], completions: [] }
   } }));
-  await page.route("**/api/sync/v1/sync", (route) => route.fulfill({ json: { protocolVersion: 1, cursor: "2", hasMore: false, acknowledgements: [], conflicts: [], changes: [] } }));
+  let remoteProfileChanged = false;
+  await page.route("**/api/sync/v1/sync", (route) => {
+    const cursor = (route.request().postDataJSON() as { cursor: string }).cursor;
+    const changes = remoteProfileChanged && cursor === "2" ? [{
+      cursor: "3", entityType: "profile", entityId: profileId, operation: "upsert", revision: "3",
+      payload: { name: "Sam", color: "#147d64", sortOrder: 0 }
+    }] : [];
+    return route.fulfill({ json: { protocolVersion: 1, cursor: changes.length ? "3" : cursor, hasMore: false, acknowledgements: [], conflicts: [], changes } });
+  });
   await page.getByRole("button", { name: "Settings" }).last().click();
   await expect(page.getByRole("heading", { name: "PostgreSQL home" })).toBeVisible();
   await expect(page.locator("#sync-indicator").getByText(/Loaded from PostgreSQL on Home Server/)).toBeVisible();
+  remoteProfileChanged = true;
+  await expect(page.getByLabel("Active profile")).toContainText("Sam", { timeout: 10_000 });
 });
 
 test("connects another browser without a pairing code", async ({ page }, testInfo) => {
