@@ -3,6 +3,7 @@ import SwiftData
 
 struct CleaningGameView: View {
     @Environment(\.modelContext) private var context
+    @Environment(SyncCoordinator.self) private var syncCoordinator
     @Query private var allTasks: [CleaningTask]
     @Query(sort: \CompletionRecord.completedAt, order: .reverse) private var completions: [CompletionRecord]
     @State private var worldState = GameWorldState()
@@ -59,11 +60,16 @@ struct CleaningGameView: View {
                     Divider()
 
                     if dailyTasks.isEmpty {
-                        ContentUnavailableView(
-                            "A clean start",
-                            systemImage: "sparkles",
-                            description: Text("Tasks due today will appear here.")
-                        )
+                        List {
+                            ContentUnavailableView(
+                                "A clean start",
+                                systemImage: "sparkles",
+                                description: Text("Tasks due today will appear here.")
+                            )
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        }
+                        .listStyle(.plain)
                     } else {
                         List {
                             if !pendingTasks.isEmpty {
@@ -92,6 +98,7 @@ struct CleaningGameView: View {
             .onAppear { isSceneActive = true }
             .onDisappear { isSceneActive = false }
         }
+        .refreshable { try? await syncCoordinator.syncNow() }
     }
 
     private func taskSort(_ lhs: CleaningTask, _ rhs: CleaningTask) -> Bool {

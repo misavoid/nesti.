@@ -36,6 +36,20 @@ struct RootView: View {
             SyncOutbox.ensureDefaultProfile(in: context)
             Task { try? await syncCoordinator.syncNow() }
         }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(30))
+                    try Task.checkCancellation()
+                    try await syncCoordinator.syncNow()
+                } catch is CancellationError {
+                    return
+                } catch {
+                    // The coordinator exposes the failure in its observable status.
+                }
+            }
+        }
         .sheet(item: $importDocument) { document in
             ImportPreviewView(document: document) {
                 PlanStore.importDocument(document, into: context)

@@ -11,6 +11,7 @@ private enum TaskScope: String, CaseIterable, Identifiable {
 
 struct TaskDashboardView: View {
     @Environment(\.modelContext) private var context
+    @Environment(SyncCoordinator.self) private var syncCoordinator
     @Query private var allTasks: [CleaningTask]
     @Query(sort: \CompletionRecord.completedAt, order: .reverse) private var completions: [CompletionRecord]
     @Query(sort: \Room.sortOrder) private var rooms: [Room]
@@ -45,11 +46,16 @@ struct TaskDashboardView: View {
                 if scope == .done {
                     doneContent
                 } else if displayedTasks.isEmpty {
-                    ContentUnavailableView(
-                        emptyTitle,
-                        systemImage: scope == .overdue ? "checkmark.seal" : "sparkles",
-                        description: Text(emptyDescription)
-                    )
+                    List {
+                        ContentUnavailableView(
+                            emptyTitle,
+                            systemImage: scope == .overdue ? "checkmark.seal" : "sparkles",
+                            description: Text(emptyDescription)
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
+                    .listStyle(.plain)
                 } else {
                     List {
                         ForEach(groupedTasks, id: \.0) { section, tasks in
@@ -97,6 +103,7 @@ struct TaskDashboardView: View {
             .sheet(isPresented: $showingNewTask) { TaskEditorView(task: nil, initialRoom: rooms.first) }
             .sheet(item: $editingTask) { TaskEditorView(task: $0, initialRoom: $0.room) }
         }
+        .refreshable { try? await syncCoordinator.syncNow() }
     }
 
     private var activeProfileName: String {
@@ -111,11 +118,16 @@ struct TaskDashboardView: View {
     @ViewBuilder
     private var doneContent: some View {
         if completions.isEmpty {
-            ContentUnavailableView(
-                "Nothing done yet",
-                systemImage: "checkmark.circle",
-                description: Text("Completed tasks will appear here.")
-            )
+            List {
+                ContentUnavailableView(
+                    "Nothing done yet",
+                    systemImage: "checkmark.circle",
+                    description: Text("Completed tasks will appear here.")
+                )
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
+            .listStyle(.plain)
         } else {
             List {
                 ForEach(groupedCompletions, id: \.day) { group in

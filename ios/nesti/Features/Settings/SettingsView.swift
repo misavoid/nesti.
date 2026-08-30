@@ -156,6 +156,7 @@ struct SettingsView: View {
                 Button("OK", role: .cancel) { syncError = nil }
             } message: { Text(syncError ?? "Unknown error") }
         }
+        .refreshable { try? await syncCoordinator.syncNow() }
     }
 
     private func exportAll() {
