@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "name": "Badezimmer Testplan",
+  "rooms": [
+    {
+      "name": "Badezimmer",
+      "tasks": [
+        {
+          "name": "Dusche putzen",
+          "nextDueDate": "2026-08-28",
+          "schedule": {
+            "type": "interval",
+            "days": 7
+          }
+        },
+        {
+          "name": "Duschabfluss reinigen",
+          "nextDueDate": "2026-08-27",
+          "schedule": {
+            "type": "interval",
+            "days": 3
+          }
+        },
+        {
+          "name": "Klo putzen",
+          "nextDueDate": "2026-08-25",
+          "schedule": {
+            "type": "interval",
+            "days": 3
+          }
+        },
+        {
+          "name": "Spiegelschrank putzen",
+          "nextDueDate": "2026-08-26",
+          "schedule": {
+            "type": "interval",
+            "days": 3
+          }
+        },
+        {
+          "name": "Waschbecken putzen",
+          "nextDueDate": "2026-08-24",
+          "schedule": {
+            "type": "interval",
+            "days": 2
+          }
+        },
+        {
+          "name": "Waschbeckenunterschrank putzen",
+          "nextDueDate": "2026-08-30",
+          "schedule": {
+            "type": "interval",
+            "days": 7
+          }
+        },
+        {
+          "name": "Fußboden putzen",
+          "nextDueDate": "2026-08-29",
+          "schedule": {
+            "type": "interval",
+            "days": 7
+          }
+        },
+        {
+          "name": "Wand putzen",
+          "nextDueDate": "2026-09-01",
+          "schedule": {
+            "type": "monthly",
+            "intervalMonths": 1
+          }
+        },
+        {
+          "name": "Heizung putzen",
+          "nextDueDate": "2026-09-05",
+          "schedule": {
+            "type": "monthly",
+            "intervalMonths": 6
+          }
+        }
+      ]
+    }
+  ]
+}

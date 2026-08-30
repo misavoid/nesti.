@@ -4,7 +4,7 @@
 DerivedData/
 *.xcuserstate
 xcuserdata/
-*.xcodeproj/project.xcworkspace/
+**/*.xcodeproj/project.xcworkspace/
 *.xccheckout
 *.moved-aside
 *.ipa

@@ -42,7 +42,6 @@ public struct WidgetCompletionSnapshot: Codable, Hashable, Identifiable {
 public struct NestiWidgetSnapshot: Codable, Hashable {
     public static let appGroupIdentifier = "group.app.nesti.shared"
     public static let storageKey = "widgetSnapshot.v1"
-    public static let gameImageFilename = "widget-island.png"
 
     public let updatedAt: Date
     public let tasks: [WidgetTaskSnapshot]

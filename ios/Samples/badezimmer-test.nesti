@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "name": "Badezimmer Testplan",
+  "rooms": [
+    {
+      "name": "Badezimmer",
+      "tasks": [
+        {
+          "name": "Dusche putzen",
+          "schedule": {
+            "type": "interval",
+            "days": 7
+          }
+        },
+        {
+          "name": "Duschabfluss reinigen",
+          "schedule": {
+            "type": "interval",
+            "days": 3
+          }
+        },
+        {
+          "name": "Klo putzen",
+          "schedule": {
+            "type": "interval",
+            "days": 3
+          }
+        },
+        {
+          "name": "Spiegelschrank putzen",
+          "schedule": {
+            "type": "interval",
+            "days": 3
+          }
+        },
+        {
+          "name": "Waschbecken putzen",
+          "schedule": {
+            "type": "interval",
+            "days": 2
+          }
+        },
+        {
+          "name": "Waschbeckenunterschrank putzen",
+          "schedule": {
+            "type": "interval",
+            "days": 7
+          }
+        },
+        {
+          "name": "Fußboden putzen",
+          "schedule": {
+            "type": "interval",
+            "days": 7
+          }
+        },
+        {
+          "name": "Wand putzen",
+          "schedule": {
+            "type": "monthly",
+            "intervalMonths": 1
+          }
+        },
+        {
+          "name": "Heizung putzen",
+          "schedule": {
+            "type": "monthly",
+            "intervalMonths": 6
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -10,10 +10,10 @@
 
 ## Architecture
 
-- `Sources/NestiCore` contains platform-independent recurrence and `.nesti` format logic.
-- `nesti/Data` contains SwiftData models and mapping to/from NestiCore values.
-- `nesti/Services` owns side effects such as notifications and file import coordination.
-- `nesti/Features` contains SwiftUI feature views. Keep business rules out of views.
+- `ios/Sources/NestiCore` contains platform-independent recurrence and `.nesti` format logic.
+- `ios/nesti/Data` contains SwiftData models and mapping to/from NestiCore values.
+- `ios/nesti/Services` owns side effects such as notifications and file import coordination.
+- `ios/nesti/Features` contains SwiftUI feature views. Keep business rules out of views.
 - Persist recurrence rules as versioned JSON data so new rule variants can be added without a store migration for every schema extension.
 
 ## Quality bar
@@ -23,7 +23,7 @@
 - Imports append to existing data unless a future flow explicitly offers another behavior.
 - Keep stable identifiers from imports/exports and generate UUIDs when older input omits them.
 - Add focused `NestiCoreTests` coverage for recurrence or file-format changes.
-- Run `swift test` for portable logic and an iOS build/test in Xcode when the iOS SDK is available.
+- Run `swift test --package-path ios` for portable logic and an iOS build/test in Xcode when the iOS SDK is available.
 
 ## Editing
 
