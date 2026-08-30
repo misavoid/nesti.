@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePairRequest, parseSyncRequest, ProtocolError } from "../../src/protocol.js";
+import { parseBootstrapRequest, parsePairRequest, parseSyncRequest, ProtocolError } from "../../src/protocol.js";
 
 const taskPayload = {
   roomId: "13a82f7a-2029-4e13-8a5d-40ea958dba88",
@@ -61,6 +61,11 @@ describe("sync protocol validation", () => {
       code: "ABCD2345",
       deviceName: "Alice's iPhone"
     });
+  });
+
+  it("validates first-run setup names", () => {
+    expect(parseBootstrapRequest({ homeName: " My Home ", deviceName: " Browser " })).toEqual({ homeName: "My Home", deviceName: "Browser" });
+    expect(() => parseBootstrapRequest({ homeName: "", deviceName: "Browser" })).toThrow(ProtocolError);
   });
 
   it("accepts profiles and profile-attributed completions", () => {

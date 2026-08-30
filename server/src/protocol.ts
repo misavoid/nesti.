@@ -350,3 +350,11 @@ export function parsePairRequest(value: unknown): { code: string; deviceName: st
   if (!/^[A-Z2-9]{8,32}$/.test(code)) throw new ProtocolError("invalid_request", "The pairing code is invalid.");
   return { code, deviceName: string(raw.deviceName, "$.deviceName", 200).trim() };
 }
+
+export function parseBootstrapRequest(value: unknown): { homeName: string; deviceName: string } {
+  const raw = record(value, "$");
+  return {
+    homeName: string(raw.homeName, "$.homeName", 200).trim(),
+    deviceName: string(raw.deviceName, "$.deviceName", 200).trim()
+  };
+}

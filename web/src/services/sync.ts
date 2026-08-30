@@ -9,6 +9,11 @@ export interface PairSession {
   snapshot: ServerSnapshot;
 }
 
+export interface PairingCode {
+  code: string;
+  expiresAt: string;
+}
+
 let runtimeStatus: RuntimeSyncStatus = { phase: "local", message: "Saved in this browser" };
 let activeSync: Promise<void> | undefined;
 let retryTimer: number | undefined;
@@ -67,6 +72,49 @@ export async function pairWithServer(code: string, deviceName: string, serverUrl
     },
     snapshot: paired.snapshot
   };
+}
+
+export async function bootstrapServer(homeName: string, deviceName: string, serverUrl = location.origin): Promise<PairSession> {
+  publish({ phase: "connecting", message: "Setting up server" });
+  const normalizedUrl = new URL(serverUrl, location.origin);
+  if (normalizedUrl.protocol !== "https:" && normalizedUrl.hostname !== "localhost" && normalizedUrl.hostname !== "127.0.0.1") {
+    throw new Error("The sync server must use HTTPS.");
+  }
+  const origin = normalizedUrl.origin;
+  const discovery = await responseJson<{ name: string; protocolVersions: number[] }>(await fetch(api(origin, "/discovery"), { cache: "no-store" }));
+  if (!discovery.protocolVersions.includes(SYNC_PROTOCOL_VERSION)) throw new Error("This server does not support the browser's sync protocol.");
+  const setup = await responseJson<{
+    protocolVersion: 1;
+    deviceToken: string;
+    deviceId: string;
+    homeId: string;
+    snapshot: ServerSnapshot;
+  }>(await fetch(api(origin, "/bootstrap"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ homeName, deviceName })
+  }));
+  return {
+    connection: {
+      id: "connection",
+      serverUrl: origin,
+      serverName: discovery.name,
+      token: setup.deviceToken,
+      homeId: setup.homeId,
+      deviceId: setup.deviceId,
+      cursor: setup.snapshot.cursor
+    },
+    snapshot: setup.snapshot
+  };
+}
+
+export async function createPairingCode(): Promise<PairingCode> {
+  const state = await syncState();
+  if (!state.connection) throw new Error("Connect this browser before creating a pairing code.");
+  return responseJson<PairingCode>(await fetch(api(state.connection.serverUrl, "/pairing-codes"), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${state.connection.token}` }
+  }));
 }
 
 export async function finishPairing(session: PairSession, mode: "use-local" | "use-server"): Promise<void> {

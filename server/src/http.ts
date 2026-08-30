@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { ApiError } from "./errors.js";
-import { parsePairRequest, parseSyncRequest, ProtocolError, SYNC_PROTOCOL_VERSION, MAX_SYNC_MUTATIONS } from "./protocol.js";
+import { parseBootstrapRequest, parsePairRequest, parseSyncRequest, ProtocolError, SYNC_PROTOCOL_VERSION, MAX_SYNC_MUTATIONS } from "./protocol.js";
 import type { DeviceIdentity, SyncRepository } from "./repository.js";
 import { serverConfig } from "./config.js";
 
@@ -70,7 +70,7 @@ class WindowRateLimit {
   }
 }
 
-export type SyncService = Pick<SyncRepository, "ready" | "pair" | "authenticate" | "snapshot" | "sync" | "revoke">;
+export type SyncService = Pick<SyncRepository, "ready" | "bootstrap" | "pair" | "issuePairingCode" | "authenticate" | "snapshot" | "sync" | "revoke">;
 
 export function makeHttpServer(repository: SyncService) {
   const pairingLimit = new WindowRateLimit(20, 60_000);
@@ -112,6 +112,14 @@ export function makeHttpServer(repository: SyncService) {
         json(response, 201, { protocolVersion: SYNC_PROTOCOL_VERSION, ...result }, requestId);
         return;
       }
+      if (method === "POST" && path === "/api/sync/v1/bootstrap") {
+        if (!pairingLimit.take()) throw new ApiError(429, "rate_limited", "Too many setup attempts. Try again later.");
+        const setup = parseBootstrapRequest(await readJson(request));
+        const result = await repository.bootstrap(setup.homeName, setup.deviceName);
+        responseStatus = 201;
+        json(response, 201, { protocolVersion: SYNC_PROTOCOL_VERSION, ...result }, requestId);
+        return;
+      }
 
       let device: DeviceIdentity | undefined;
       if (path.startsWith("/api/sync/v1/")) device = await repository.authenticate(bearerToken(request));
@@ -126,6 +134,12 @@ export function makeHttpServer(repository: SyncService) {
         const result = await repository.sync(device, parseSyncRequest(await readJson(request)));
         responseStatus = 200;
         json(response, 200, result, requestId);
+        return;
+      }
+      if (method === "POST" && path === "/api/sync/v1/pairing-codes" && device) {
+        const result = await repository.issuePairingCode(device.homeId, 15);
+        responseStatus = 201;
+        json(response, 201, result, requestId);
         return;
       }
       if (method === "DELETE" && path === "/api/sync/v1/devices/current" && device) {

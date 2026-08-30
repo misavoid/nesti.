@@ -1,5 +1,5 @@
 // @ts-nocheck
-const CACHE = "nesti-shell-v3";
+const CACHE = "nesti-shell-v4";
 const SHELL = ["/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/models/FloatingIsland.glb"];
 
 async function precache() {

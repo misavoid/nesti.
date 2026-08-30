@@ -17,7 +17,9 @@ const snapshot: SyncSnapshot = {
 
 const service: SyncService = {
   ready: vi.fn(async () => undefined),
+  bootstrap: vi.fn(async () => ({ deviceToken: "b".repeat(43), deviceId, homeId, snapshot })),
   pair: vi.fn(async () => ({ deviceToken: "a".repeat(43), deviceId, homeId, snapshot })),
+  issuePairingCode: vi.fn(async () => ({ code: "BCDE2345", expiresAt: "2030-01-01T00:00:00.000Z" })),
   authenticate: vi.fn(async () => ({ id: deviceId, homeId, name: "Test Device" })),
   snapshot: vi.fn(async () => snapshot),
   sync: vi.fn(async (_device, request) => ({
@@ -65,6 +67,25 @@ describe("sync HTTP API", () => {
     });
     expect(response.status).toBe(201);
     expect(await response.json()).toMatchObject({ deviceId, homeId, snapshot: { cursor: "1" } });
+  });
+
+  it("bootstraps the first browser", async () => {
+    const response = await fetch(`${origin}/api/sync/v1/bootstrap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ homeName: "My Home", deviceName: "Web browser" })
+    });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ deviceToken: "b".repeat(43), homeId });
+  });
+
+  it("lets an authenticated device issue a pairing code", async () => {
+    const response = await fetch(`${origin}/api/sync/v1/pairing-codes`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${"a".repeat(43)}` }
+    });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ code: "BCDE2345" });
   });
 
   it("requires a bearer token for snapshots", async () => {

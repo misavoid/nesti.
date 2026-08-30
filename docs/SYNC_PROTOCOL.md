@@ -12,7 +12,9 @@ All endpoints use HTTPS JSON under `/api/sync/v1`. UUIDs are canonical lowercase
 
 ## Pairing
 
-An administrator creates a home and short-lived, one-use pairing code with the server CLI. A client exchanges it at `POST /api/sync/v1/pair`:
+On an empty database, the website calls `POST /api/sync/v1/bootstrap` once to atomically create the home and authorize that browser. The endpoint returns `409 already_initialized` after any home exists. This first-run operation must be completed by the owner immediately after exposing a new server.
+
+An authorized device creates a 15-minute, one-use code at `POST /api/sync/v1/pairing-codes`. A new client exchanges it at `POST /api/sync/v1/pair`:
 
 ```json
 {

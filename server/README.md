@@ -23,6 +23,8 @@ CI must run this suite against PostgreSQL. It covers pairing-code consumption, m
 
 ## Administration
 
+For normal deployments, initialize an empty server from the website's Settings view. The first browser becomes an authorized device and can issue pairing codes for other devices. Initialization is permanently disabled as soon as the database contains a home.
+
 After compiling and configuring the database environment:
 
 ```sh
