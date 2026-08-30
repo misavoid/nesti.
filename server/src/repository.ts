@@ -12,6 +12,7 @@ import {
   type HomePayload,
   type MutationAcknowledgement,
   type MutationConflict,
+  type ProfilePayload,
   type RoomPayload,
   type SyncChange,
   type SyncMutation,
@@ -65,6 +66,14 @@ function roomPayload(row: Record<string, unknown>): RoomPayload {
   };
 }
 
+function profilePayload(row: Record<string, unknown>): ProfilePayload {
+  return {
+    name: row.name as string,
+    color: row.color as string,
+    sortOrder: row.sort_order as number
+  };
+}
+
 function taskPayload(row: Record<string, unknown>): TaskPayload {
   const payload: TaskPayload = {
     roomId: row.room_id as string,
@@ -92,6 +101,8 @@ function completionPayload(row: Record<string, unknown>): CompletionPayload {
     taskId: row.task_id as string,
     completedAt: iso(row.completed_at as Date | string)
   };
+  const profileId = optional(row.profile_id as string | null);
+  if (profileId != null) payload.profileId = profileId;
   const scheduledFor = optional(row.scheduled_for as string | null);
   if (scheduledFor != null) payload.scheduledFor = scheduledFor;
   return payload;
@@ -232,8 +243,9 @@ export class SyncRepository {
   }
 
   private async snapshotWithClient(client: pg.PoolClient, homeId: string): Promise<SyncSnapshot> {
-    const [homeResult, roomsResult, tasksResult, completionsResult, cursor] = await Promise.all([
+    const [homeResult, profilesResult, roomsResult, tasksResult, completionsResult, cursor] = await Promise.all([
       client.query("SELECT * FROM homes WHERE id = $1", [homeId]),
+      client.query("SELECT * FROM profiles WHERE home_id = $1 AND deleted_at IS NULL ORDER BY sort_order, id", [homeId]),
       client.query("SELECT * FROM rooms WHERE home_id = $1 AND deleted_at IS NULL ORDER BY sort_order, id", [homeId]),
       client.query("SELECT * FROM tasks WHERE home_id = $1 AND deleted_at IS NULL ORDER BY room_id, sort_order, id", [homeId]),
       client.query("SELECT * FROM completion_records WHERE home_id = $1 AND deleted_at IS NULL ORDER BY completed_at, id", [homeId]),
@@ -245,6 +257,7 @@ export class SyncRepository {
       protocolVersion: SYNC_PROTOCOL_VERSION,
       cursor,
       home: { id: home.id as string, revision: home.revision as string, payload: homePayload(home) },
+      profiles: profilesResult.rows.map((row: Record<string, unknown>) => ({ id: row.id as string, revision: row.revision as string, payload: profilePayload(row) })),
       rooms: roomsResult.rows.map((row: Record<string, unknown>) => ({ id: row.id as string, revision: row.revision as string, payload: roomPayload(row) })),
       tasks: tasksResult.rows.map((row: Record<string, unknown>) => ({ id: row.id as string, revision: row.revision as string, payload: taskPayload(row) })),
       completions: completionsResult.rows.map((row: Record<string, unknown>) => ({ id: row.id as string, revision: row.revision as string, payload: completionPayload(row) }))
@@ -317,7 +330,7 @@ export class SyncRepository {
     const result = await client.query(`SELECT * FROM ${this.table(type)} WHERE home_id = $1 AND id = $2 FOR UPDATE`, [homeId, id]);
     const row = result.rows[0] as Record<string, unknown> | undefined;
     if (!row) return undefined;
-    const payload = type === "room" ? roomPayload(row) : type === "task" ? taskPayload(row) : completionPayload(row);
+    const payload = type === "profile" ? profilePayload(row) : type === "room" ? roomPayload(row) : type === "task" ? taskPayload(row) : completionPayload(row);
     return { revision: row.revision as string, deleted: row.deleted_at != null, payload };
   }
 
@@ -327,8 +340,12 @@ export class SyncRepository {
       return result.rowCount === 1;
     }
     if (type === "completion") {
-      const result = await client.query("SELECT 1 FROM tasks WHERE home_id = $1 AND id = $2 AND deleted_at IS NULL", [homeId, (payload as CompletionPayload).taskId]);
-      return result.rowCount === 1;
+      const completion = payload as CompletionPayload;
+      const task = await client.query("SELECT 1 FROM tasks WHERE home_id = $1 AND id = $2 AND deleted_at IS NULL", [homeId, completion.taskId]);
+      if (task.rowCount !== 1) return false;
+      if (!completion.profileId) return true;
+      const profile = await client.query("SELECT 1 FROM profiles WHERE home_id = $1 AND id = $2 AND deleted_at IS NULL", [homeId, completion.profileId]);
+      return profile.rowCount === 1;
     }
     return true;
   }
@@ -346,9 +363,9 @@ export class SyncRepository {
   }
 
   private async exceedsEntityLimit(client: pg.PoolClient, homeId: string, type: EntityType): Promise<boolean> {
-    if (type !== "room" && type !== "task") return false;
+    if (type !== "profile" && type !== "room" && type !== "task") return false;
     const table = this.table(type);
-    const limit = type === "room" ? 250 : 10_000;
+    const limit = type === "profile" ? 50 : type === "room" ? 250 : 10_000;
     const result = await client.query<{ count: string }>(`SELECT count(*)::bigint AS count FROM ${table} WHERE home_id = $1 AND deleted_at IS NULL`, [homeId]);
     return BigInt(result.rows[0]?.count ?? "0") >= BigInt(limit);
   }
@@ -367,6 +384,18 @@ export class SyncRepository {
            name = EXCLUDED.name, notes = EXCLUDED.notes, icon = EXCLUDED.icon,
            sort_order = EXCLUDED.sort_order, revision = EXCLUDED.revision, updated_at = now(), deleted_at = NULL`,
         [homeId, id, room.name, room.notes, room.icon, room.sortOrder, revision]
+      );
+      return;
+    }
+    if (type === "profile") {
+      const profile = payload as ProfilePayload;
+      await client.query(
+        `INSERT INTO profiles (home_id, id, name, color, sort_order, revision)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (home_id, id) DO UPDATE SET
+           name = EXCLUDED.name, color = EXCLUDED.color, sort_order = EXCLUDED.sort_order,
+           revision = EXCLUDED.revision, updated_at = now(), deleted_at = NULL`,
+        [homeId, id, profile.name, profile.color, profile.sortOrder, revision]
       );
       return;
     }
@@ -391,18 +420,19 @@ export class SyncRepository {
     }
     const completion = payload as CompletionPayload;
     await client.query(
-      `INSERT INTO completion_records (home_id, id, task_id, completed_at, scheduled_for, revision)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO completion_records (home_id, id, task_id, profile_id, completed_at, scheduled_for, revision)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (home_id, id) DO UPDATE SET
-         task_id = EXCLUDED.task_id, completed_at = EXCLUDED.completed_at,
+         task_id = EXCLUDED.task_id, profile_id = EXCLUDED.profile_id, completed_at = EXCLUDED.completed_at,
          scheduled_for = EXCLUDED.scheduled_for, revision = EXCLUDED.revision,
          updated_at = now(), deleted_at = NULL`,
-      [homeId, id, completion.taskId, completion.completedAt, completion.scheduledFor ?? null, revision]
+      [homeId, id, completion.taskId, completion.profileId ?? null, completion.completedAt, completion.scheduledFor ?? null, revision]
     );
   }
 
   private table(type: Exclude<EntityType, "home">): string;
   private table(type: EntityType): string {
+    if (type === "profile") return "profiles";
     if (type === "room") return "rooms";
     if (type === "task") return "tasks";
     if (type === "completion") return "completion_records";

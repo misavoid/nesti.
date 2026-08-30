@@ -25,7 +25,7 @@ The response contains a random bearer token exactly once, the home/device identi
 
 ## Snapshot
 
-`GET /api/sync/v1/snapshot` requires `Authorization: Bearer <device-token>`. It returns the current non-deleted home, rooms, tasks, and completion records plus their revisions and a cursor. Clients validate the entire response before atomically installing it.
+`GET /api/sync/v1/snapshot` requires `Authorization: Bearer <device-token>`. It returns the current non-deleted home, profiles, rooms, tasks, and completion records plus their revisions and a cursor. Clients validate the entire response before atomically installing it.
 
 ## Incremental sync
 
@@ -62,9 +62,10 @@ Conflicts do not alter the entity. Resolution is submitted as a new mutation UUI
 ## Entity payloads
 
 - `home`: `name`.
+- `profile`: `name`, six-digit hex `color`, and `sortOrder`.
 - `room`: `name`, `notes`, `icon`, and `sortOrder`.
 - `task`: `roomId`, task fields matching `.nesti` semantics, `reminder`, and `createdAt`.
-- `completion`: `taskId`, `completedAt`, and optional `scheduledFor`.
+- `completion`: `taskId`, optional `profileId`, `completedAt`, and optional `scheduledFor`.
 
 Dates use ISO-8601 timestamps. `nextDueDate` and `scheduledFor` additionally accept local `YYYY-MM-DD` calendar dates so recurrence does not shift across time zones. Recurrence objects follow `.nesti` version 1.
 

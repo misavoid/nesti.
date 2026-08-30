@@ -104,7 +104,7 @@ Identifiers and export timestamps are optional for generated files; nesti. creat
 
 - A current Node.js LTS release and npm for local development
 - Docker for production-parity builds and serving
-- PostgreSQL is supplied by Docker when the optional sync profile is enabled
+- PostgreSQL is supplied by the full Docker Compose stack
 
 ## Run the native app
 
@@ -135,7 +135,7 @@ docker build -t nesti-web ./web
 docker run --rm -p 8080:8080 nesti-web
 ```
 
-The browser remains offline-first: Astro emits static assets and IndexedDB is the browser's working copy. The production Compose stack also includes a separate nesti. sync API and PostgreSQL; pairing is optional, and unpaired clients do not depend on the API. A deliberately static-only host can start just the `app` service. The stack does not add public accounts or analytics. See [`web/PLAN.md`](web/PLAN.md) and [`docs/IOS_SERVER_SYNC_PLAN.md`](docs/IOS_SERVER_SYNC_PLAN.md) for the local-only baseline and sync architecture.
+The browser remains offline-first: Astro emits static assets and IndexedDB is the browser's working copy. The production Compose stack also includes a separate nesti. sync API and PostgreSQL; pairing is optional, and unpaired clients do not depend on the API. Paired browsers and native apps share household profiles, and task completions retain profile attribution. A deliberately static-only host can start just the `app` service. The stack does not add public accounts or analytics. See [`web/PLAN.md`](web/PLAN.md) and [`docs/IOS_SERVER_SYNC_PLAN.md`](docs/IOS_SERVER_SYNC_PLAN.md) for the local-only baseline and sync architecture.
 
 The production Compose stack joins the existing Virtus Traefik network for automatic HTTP-to-HTTPS redirects and Let's Encrypt certificates issued through Hetzner DNS-01 for `nesti.misavoid.dev`. See [`web/DEPLOYMENT.md`](web/DEPLOYMENT.md) for DNS, shared-network, startup, and verification steps.
 

@@ -9,6 +9,7 @@ const snapshot: SyncSnapshot = {
   protocolVersion: 1,
   cursor: "1",
   home: { id: homeId, revision: "1", payload: { name: "Home" } },
+  profiles: [],
   rooms: [],
   tasks: [],
   completions: []

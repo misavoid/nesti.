@@ -59,6 +59,15 @@ curl -I https://nesti.misavoid.dev/
 curl https://nesti.misavoid.dev/api/sync/v1/discovery
 ```
 
+After this release, confirm the migration log includes both `001_initial.sql` and `002_profiles.sql`. Pair one browser, create a second profile, complete a task, wait for the UI to show `Saved to PostgreSQL`, and verify the committed server rows:
+
+```sh
+docker compose exec -T db psql -U nesti_owner -d nesti -c "select count(*) as profiles from profiles where deleted_at is null;"
+docker compose exec -T db psql -U nesti_owner -d nesti -c "select count(*) as attributed_completions from completion_records where deleted_at is null and profile_id is not null;"
+```
+
+Repeat with the iOS app using a new pairing code and confirm changes from each client appear on the other before declaring the deployment complete.
+
 If the hostname does not resolve, compare the private records directly:
 
 ```sh

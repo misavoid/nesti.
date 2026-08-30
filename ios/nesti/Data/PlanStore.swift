@@ -5,28 +5,41 @@ import SwiftData
 enum PlanStore {
     static func addRoom(name: String, notes: String, icon: String, to context: ModelContext) {
         let rooms = (try? context.fetch(FetchDescriptor<Room>())) ?? []
-        context.insert(Room(name: name.trimmed, notes: notes.trimmed, icon: icon, sortOrder: rooms.count))
+        let room = Room(name: name.trimmed, notes: notes.trimmed, icon: icon, sortOrder: rooms.count)
+        context.insert(room)
+        SyncOutbox.enqueue(.room, id: room.id, operation: .upsert, payload: SyncOutbox.payload(for: room), in: context)
         try? context.save()
+        SyncOutbox.didSave()
     }
 
     static func updateRoom(_ room: Room, name: String, notes: String, icon: String, in context: ModelContext) {
         room.name = name.trimmed
         room.roomNotes = notes.trimmed
         room.icon = icon
+        SyncOutbox.enqueue(.room, id: room.id, operation: .upsert, payload: SyncOutbox.payload(for: room), in: context)
         try? context.save()
+        SyncOutbox.didSave()
     }
 
     static func moveRooms(_ rooms: [Room], from offsets: IndexSet, to destination: Int, in context: ModelContext) {
         var reordered = rooms
         reordered.move(fromOffsets: offsets, toOffset: destination)
         for (index, room) in reordered.enumerated() { room.sortOrder = index }
+        for room in reordered { SyncOutbox.enqueue(.room, id: room.id, operation: .upsert, payload: SyncOutbox.payload(for: room), in: context) }
         try? context.save()
+        SyncOutbox.didSave()
     }
 
     static func deleteRoom(_ room: Room, from context: ModelContext) {
-        for task in room.tasks { NotificationScheduler.shared.remove(for: task.id) }
+        for task in room.tasks {
+            for completion in task.completions { SyncOutbox.enqueue(.completion, id: completion.id, operation: .delete, payload: nil, in: context) }
+            SyncOutbox.enqueue(.task, id: task.id, operation: .delete, payload: nil, in: context)
+            NotificationScheduler.shared.remove(for: task.id)
+        }
+        SyncOutbox.enqueue(.room, id: room.id, operation: .delete, payload: nil, in: context)
         context.delete(room)
         try? context.save()
+        SyncOutbox.didSave()
     }
 
     static func saveTask(
@@ -53,13 +66,20 @@ enum PlanStore {
         model.reminderMinute = reminderMinute
         model.nextDueAt = Calendar.current.startOfDay(for: nextDueAt)
         if task == nil { context.insert(model) }
+        SyncOutbox.enqueue(.task, id: model.id, operation: .upsert, payload: SyncOutbox.payload(for: model), in: context)
         try? context.save()
+        SyncOutbox.didSave()
         NotificationScheduler.shared.replaceReminder(for: model)
     }
 
     static func complete(_ task: CleaningTask, at date: Date = Date(), in context: ModelContext) {
         let scheduledFor = task.nextDueAt
-        context.insert(CompletionRecord(completedAt: date, scheduledFor: scheduledFor, task: task))
+        let activeProfileID = UserDefaults.standard.string(forKey: "activeProfileID").flatMap(UUID.init(uuidString:))
+        let profile = activeProfileID.flatMap { id in
+            try? context.fetch(FetchDescriptor<UserProfile>(predicate: #Predicate { $0.id == id })).first
+        }
+        let completion = CompletionRecord(completedAt: date, scheduledFor: scheduledFor, task: task, profile: profile)
+        context.insert(completion)
         task.lastCompletedAt = date
         if let schedule = task.schedule {
             task.nextDueAt = RecurrenceCalculator.nextDueDate(
@@ -70,14 +90,19 @@ enum PlanStore {
         } else {
             task.nextDueAt = nil
         }
+        SyncOutbox.enqueue(.task, id: task.id, operation: .upsert, payload: SyncOutbox.payload(for: task), in: context)
+        SyncOutbox.enqueue(.completion, id: completion.id, operation: .upsert, payload: SyncOutbox.payload(for: completion), in: context)
         try? context.save()
+        SyncOutbox.didSave()
         NotificationScheduler.shared.replaceReminder(for: task)
     }
 
     static func uncomplete(_ completion: CompletionRecord, in context: ModelContext) {
         guard let task = completion.task else {
+            SyncOutbox.enqueue(.completion, id: completion.id, operation: .delete, payload: nil, in: context)
             context.delete(completion)
             try? context.save()
+            SyncOutbox.didSave()
             return
         }
 
@@ -91,7 +116,10 @@ enum PlanStore {
         }
 
         context.delete(completion)
+        SyncOutbox.enqueue(.completion, id: completion.id, operation: .delete, payload: nil, in: context)
+        SyncOutbox.enqueue(.task, id: task.id, operation: .upsert, payload: SyncOutbox.payload(for: task), in: context)
         try? context.save()
+        SyncOutbox.didSave()
 
         if isLatestCompletion {
             NotificationScheduler.shared.replaceReminder(for: task)
@@ -100,8 +128,11 @@ enum PlanStore {
 
     static func deleteTask(_ task: CleaningTask, from context: ModelContext) {
         NotificationScheduler.shared.remove(for: task.id)
+        for completion in task.completions { SyncOutbox.enqueue(.completion, id: completion.id, operation: .delete, payload: nil, in: context) }
+        SyncOutbox.enqueue(.task, id: task.id, operation: .delete, payload: nil, in: context)
         context.delete(task)
         try? context.save()
+        SyncOutbox.didSave()
     }
 
     @discardableResult
@@ -117,6 +148,7 @@ enum PlanStore {
                 sortOrder: existingRooms.count + roomOffset
             )
             context.insert(room)
+            SyncOutbox.enqueue(.room, id: room.id, operation: .upsert, payload: SyncOutbox.payload(for: room), in: context)
             for taskRecord in record.tasks.sorted(by: { $0.sortOrder < $1.sortOrder }) {
                 let task = CleaningTask(
                     id: uniqueTaskID(taskRecord.id, context: context),
@@ -133,10 +165,12 @@ enum PlanStore {
                     room: room
                 )
                 context.insert(task)
+                SyncOutbox.enqueue(.task, id: task.id, operation: .upsert, payload: SyncOutbox.payload(for: task), in: context)
                 importedTasks += 1
             }
         }
         try? context.save()
+        SyncOutbox.didSave()
         NotificationScheduler.shared.rebuildAll(in: context)
         return importedTasks
     }

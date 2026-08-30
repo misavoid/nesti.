@@ -2,7 +2,7 @@
 
 The sync server is the optional PostgreSQL-backed authority for paired nesti. homes. Native and web clients keep complete offline replicas and communicate only with the versioned HTTP API; they never connect to PostgreSQL directly.
 
-See `docs/SYNC_PROTOCOL.md` for the wire contract and `web/DEPLOYMENT.md` for the Compose stack, secrets, administration commands, backups, and upgrades.
+See `../docs/SYNC_PROTOCOL.md` for the wire contract and `../web/DEPLOYMENT.md` for the Compose stack, secrets, administration commands, backups, and upgrades.
 
 ## Development checks
 

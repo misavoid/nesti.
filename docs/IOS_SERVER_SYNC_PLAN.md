@@ -4,6 +4,8 @@
 
 This is a post-MVP plan for adding an optional, self-hosted nesti. sync service backed by PostgreSQL, then connecting the iOS and Mac Catalyst app to it. It does not change the MVP's offline-first guarantee, make an account mandatory, or turn the static Astro bundle into an application backend. A user who never configures sync must retain the current local-only behavior.
 
+The initial implementation is present: the PostgreSQL/API stack, browser IndexedDB outbox and pairing UI, native SwiftData outbox and Keychain transport, conflict handling, household profiles, and profile-attributed completions. Production release still requires the server-side migration/integration checks, backup restore drill, and two-client convergence exercise described below.
+
 The first client delivery targets one home shared by the user's native devices. The Docker stack, sync API, native client, and web-client sync are separate workstreams using one documented protocol. For a connected home, PostgreSQL is the durable server authority while SwiftData and IndexedDB remain complete offline working copies.
 
 ## Goals
@@ -43,7 +45,7 @@ The recommended first authentication model is an opaque, revocable per-device be
 Add protocol values and deterministic merge decisions to `ios/Sources/NestiCore`. They must depend only on Foundation and remain independently testable:
 
 - `SyncProtocolVersion`, `SyncMutation`, `SyncChange`, `SyncConflict`, and cursor/snapshot envelopes.
-- Entity payloads for home metadata, rooms, tasks, completion records, and tombstones.
+- Entity payloads for home metadata, profiles, rooms, tasks, completion records, and tombstones.
 - Strict decoding, size/count limits, and validation before any response reaches SwiftData.
 - A reducer that turns the current entity, pending local mutation, and server response into an explicit apply, retry, or conflict result.
 
@@ -60,9 +62,9 @@ Extend the nesti. Compose stack from one static `app` container to these service
 
 Put `sync-api` and `db` on a private Compose network. Only `app` and `sync-api` join the external Traefik network. Route a versioned path such as `/api/sync/v1` to `sync-api` with higher priority than the static-app route, so browsers and native clients can use the same HTTPS origin without CORS. Direct database access from a browser or native app is forbidden.
 
-PostgreSQL is a good fit because sync acknowledgement, mutation application, revision allocation, change-log insertion, and cursor advancement must commit atomically. Use normalized tables for `homes`, `devices`, `rooms`, `tasks`, and `completion_records`, plus `applied_mutations`, `change_log`, and retained tombstones. Store recurrence and extensible metadata as validated versioned `jsonb`; keep identifiers, ownership, revisions, timestamps, and relationships in typed columns with foreign keys and uniqueness constraints.
+PostgreSQL is a good fit because sync acknowledgement, mutation application, revision allocation, change-log insertion, and cursor advancement must commit atomically. Use normalized tables for `homes`, `devices`, `profiles`, `rooms`, `tasks`, and `completion_records`, plus `applied_mutations`, `change_log`, and retained tombstones. Store recurrence and extensible metadata as validated versioned `jsonb`; keep identifiers, ownership, revisions, timestamps, and relationships in typed columns with foreign keys and uniqueness constraints.
 
-Every row is scoped to a home UUID. Use a server-generated monotonic sequence for the change cursor and unique constraints for mutation idempotency. The API must apply a sync request in one database transaction and return only committed revisions. Database triggers should enforce structural invariants, while the API and shared compatibility fixtures enforce nesti. domain validation.
+Every row is scoped to a home UUID. Use a server-generated monotonic sequence for the change cursor and unique constraints for mutation idempotency. The API must apply a sync request in one database transaction and return only committed revisions. Database constraints enforce structural invariants, while the API and shared compatibility fixtures enforce nesti. domain validation.
 
 Keep database credentials out of images, Compose files, browser assets, and git. Supply them through Docker secrets or deployment-managed environment files. Use a least-privilege runtime database role; reserve schema-owner privileges for `migrate`. Encrypt transport at Traefik, reject untrusted forwarded headers, redact authorization values, and set request/time limits at both proxy and API layers.
 

@@ -4,6 +4,7 @@ import SwiftData
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(SyncCoordinator.self) private var syncCoordinator
     @Query private var allTasks: [CleaningTask]
     @Query private var completions: [CompletionRecord]
     @State private var selectedTab = 1
@@ -32,6 +33,8 @@ struct RootView: View {
         .onChange(of: scenePhase, initial: true) {
             guard scenePhase == .active else { return }
             WidgetSnapshotPublisher.publish(tasks: allTasks, completions: completions)
+            SyncOutbox.ensureDefaultProfile(in: context)
+            Task { try? await syncCoordinator.syncNow() }
         }
         .sheet(item: $importDocument) { document in
             ImportPreviewView(document: document) {

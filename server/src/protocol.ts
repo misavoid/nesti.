@@ -2,7 +2,7 @@ export const SYNC_PROTOCOL_VERSION = 1 as const;
 export const MAX_SYNC_MUTATIONS = 500;
 export const MAX_SYNC_CHANGES = 500;
 
-export type EntityType = "home" | "room" | "task" | "completion";
+export type EntityType = "home" | "profile" | "room" | "task" | "completion";
 export type MutationOperation = "upsert" | "delete";
 
 export interface HomePayload {
@@ -13,6 +13,12 @@ export interface RoomPayload {
   name: string;
   notes: string;
   icon: string;
+  sortOrder: number;
+}
+
+export interface ProfilePayload {
+  name: string;
+  color: string;
   sortOrder: number;
 }
 
@@ -45,12 +51,14 @@ export interface TaskPayload {
 
 export interface CompletionPayload {
   taskId: string;
+  profileId?: string;
   completedAt: string;
   scheduledFor?: string;
 }
 
 export interface EntityPayloads {
   home: HomePayload;
+  profile: ProfilePayload;
   room: RoomPayload;
   task: TaskPayload;
   completion: CompletionPayload;
@@ -111,6 +119,7 @@ export interface SyncSnapshot {
   protocolVersion: typeof SYNC_PROTOCOL_VERSION;
   cursor: string;
   home: { id: string; revision: string; payload: HomePayload };
+  profiles: Array<{ id: string; revision: string; payload: ProfilePayload }>;
   rooms: Array<{ id: string; revision: string; payload: RoomPayload }>;
   tasks: Array<{ id: string; revision: string; payload: TaskPayload }>;
   completions: Array<{ id: string; revision: string; payload: CompletionPayload }>;
@@ -236,6 +245,17 @@ function parseRoom(value: unknown, path: string): RoomPayload {
   };
 }
 
+function parseProfile(value: unknown, path: string): ProfilePayload {
+  const raw = record(value, path);
+  const color = string(raw.color, `${path}.color`, 7);
+  if (!/^#[0-9a-f]{6}$/i.test(color)) throw new ProtocolError("invalid_request", `${path}.color must be a six-digit hex color.`);
+  return {
+    name: string(raw.name, `${path}.name`, 100).trim(),
+    color: color.toLowerCase(),
+    sortOrder: integer(raw.sortOrder, `${path}.sortOrder`, -1_000_000, 1_000_000)
+  };
+}
+
 function parseTask(value: unknown, path: string): TaskPayload {
   const raw = record(value, path);
   const reminderRaw = record(raw.reminder, `${path}.reminder`);
@@ -268,6 +288,7 @@ function parseCompletion(value: unknown, path: string): CompletionPayload {
     taskId: parseIdentifier(raw.taskId, `${path}.taskId`),
     completedAt: timestamp(raw.completedAt, `${path}.completedAt`)
   };
+  if (raw.profileId != null) result.profileId = parseIdentifier(raw.profileId, `${path}.profileId`);
   if (raw.scheduledFor != null) result.scheduledFor = timestamp(raw.scheduledFor, `${path}.scheduledFor`, true);
   return result;
 }
@@ -275,6 +296,7 @@ function parseCompletion(value: unknown, path: string): CompletionPayload {
 export function parseEntityPayload(type: EntityType, value: unknown, path = "$.payload"): EntityPayload {
   switch (type) {
     case "home": return parseHome(value, path);
+    case "profile": return parseProfile(value, path);
     case "room": return parseRoom(value, path);
     case "task": return parseTask(value, path);
     case "completion": return parseCompletion(value, path);
@@ -292,7 +314,7 @@ export function parseSyncRequest(value: unknown): SyncRequest {
   const mutations = raw.mutations.map((value, index): SyncMutation => {
     const path = `$.mutations[${index}]`;
     const mutation = record(value, path);
-    if (!(["home", "room", "task", "completion"] as unknown[]).includes(mutation.entityType)) {
+    if (!(["home", "profile", "room", "task", "completion"] as unknown[]).includes(mutation.entityType)) {
       throw new ProtocolError("invalid_request", `Invalid entity type at ${path}.entityType.`);
     }
     if (mutation.operation !== "upsert" && mutation.operation !== "delete") {

@@ -62,4 +62,18 @@ describe("sync protocol validation", () => {
       deviceName: "Alice's iPhone"
     });
   });
+
+  it("accepts profiles and profile-attributed completions", () => {
+    const profileId = "13a82f7a-2029-4e13-8a5d-40ea958dba88";
+    const request = parseSyncRequest({
+      protocolVersion: 1,
+      cursor: "0",
+      mutations: [
+        { id: crypto.randomUUID(), entityType: "profile", entityId: profileId, operation: "upsert", baseRevision: "0", payload: { name: "Alex", color: "#147d64", sortOrder: 0 } },
+        { id: crypto.randomUUID(), entityType: "completion", entityId: crypto.randomUUID(), operation: "upsert", baseRevision: "0", payload: { taskId: crypto.randomUUID(), profileId, completedAt: "2026-08-30T12:00:00Z" } }
+      ]
+    });
+    expect(request.mutations[0]?.payload).toEqual({ name: "Alex", color: "#147d64", sortOrder: 0 });
+    expect(request.mutations[1]?.payload).toMatchObject({ profileId });
+  });
 });

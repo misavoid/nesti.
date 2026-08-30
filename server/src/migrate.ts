@@ -44,7 +44,7 @@ async function migrate(): Promise<void> {
     await client.query(`ALTER ROLE nesti_api PASSWORD ${password}`);
     await client.query("GRANT USAGE ON SCHEMA public TO nesti_api");
     await client.query("GRANT SELECT ON schema_migrations TO nesti_api");
-    await client.query("GRANT SELECT, INSERT, UPDATE ON homes, devices, pairing_codes, rooms, tasks, completion_records TO nesti_api");
+    await client.query("GRANT SELECT, INSERT, UPDATE ON homes, devices, pairing_codes, profiles, rooms, tasks, completion_records TO nesti_api");
     await client.query("GRANT SELECT, INSERT ON change_log, applied_mutations TO nesti_api");
     await client.query("GRANT USAGE, SELECT ON SEQUENCE sync_cursor_sequence TO nesti_api");
   } finally {
