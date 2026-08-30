@@ -90,6 +90,10 @@ final class SyncCoordinator {
             )
             context.insert(connection)
             setRevision(type: .home, id: paired.homeId, revision: paired.snapshot.home.revision, in: context)
+            for record in paired.snapshot.profiles { setRevision(type: .profile, id: record.id, revision: record.revision, in: context) }
+            for record in paired.snapshot.rooms { setRevision(type: .room, id: record.id, revision: record.revision, in: context) }
+            for record in paired.snapshot.tasks { setRevision(type: .task, id: record.id, revision: record.revision, in: context) }
+            for record in paired.snapshot.completions { setRevision(type: .completion, id: record.id, revision: record.revision, in: context) }
 
             if localHasData && !remoteHasData {
                 SyncOutbox.enqueue(.home, id: paired.homeId, operation: .upsert, payload: SyncPayload(name: homeName), in: context)

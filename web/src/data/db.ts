@@ -361,13 +361,13 @@ export async function connectToSnapshot(
   const done = transactionDone(tx);
   for (const name of syncStores) tx.objectStore(name).clear();
   tx.objectStore("sync").put(connection);
+  installSnapshotRevisions(tx, remote);
 
   if (mode === "use-server") {
     for (const name of dataStores) tx.objectStore(name).clear();
     tx.objectStore("settings").put({ id: "settings", homeName: remote.home.payload.name, activeProfileId: remote.profiles[0]?.id });
     installSnapshotRecords(tx, remote);
   } else {
-    tx.objectStore("revisions").put({ id: entityKey("home", connection.homeId), revision: remote.home.revision } satisfies SyncRevision);
     await enqueueMutation(tx, "home", connection.homeId, "upsert", { name: local.settings.homeName });
     for (const profile of local.profiles) await enqueueMutation(tx, "profile", profile.id, "upsert", withoutId(profile));
     for (const room of local.rooms) await enqueueMutation(tx, "room", room.id, "upsert", withoutId(room));
@@ -377,23 +377,31 @@ export async function connectToSnapshot(
   await done;
 }
 
+function installSnapshotRevisions(tx: IDBTransaction, remote: ServerSnapshot): void {
+  const revisions = tx.objectStore("revisions");
+  revisions.put({ id: entityKey("home", remote.home.id), revision: remote.home.revision } satisfies SyncRevision);
+  for (const [type, records] of [
+    ["profile", remote.profiles],
+    ["room", remote.rooms],
+    ["task", remote.tasks],
+    ["completion", remote.completions]
+  ] as const) {
+    for (const record of records) revisions.put({ id: entityKey(type, record.id), revision: record.revision } satisfies SyncRevision);
+  }
+}
+
 function installSnapshotRecords(tx: IDBTransaction, remote: ServerSnapshot): void {
-  tx.objectStore("revisions").put({ id: entityKey("home", remote.home.id), revision: remote.home.revision } satisfies SyncRevision);
   for (const item of remote.profiles) {
     tx.objectStore("profiles").put({ id: item.id, ...item.payload });
-    tx.objectStore("revisions").put({ id: entityKey("profile", item.id), revision: item.revision } satisfies SyncRevision);
   }
   for (const item of remote.rooms) {
     tx.objectStore("rooms").put({ id: item.id, ...item.payload });
-    tx.objectStore("revisions").put({ id: entityKey("room", item.id), revision: item.revision } satisfies SyncRevision);
   }
   for (const item of remote.tasks) {
     tx.objectStore("tasks").put({ id: item.id, ...item.payload });
-    tx.objectStore("revisions").put({ id: entityKey("task", item.id), revision: item.revision } satisfies SyncRevision);
   }
   for (const item of remote.completions) {
     tx.objectStore("completions").put({ id: item.id, ...item.payload });
-    tx.objectStore("revisions").put({ id: entityKey("completion", item.id), revision: item.revision } satisfies SyncRevision);
   }
 }
 

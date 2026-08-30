@@ -75,6 +75,17 @@ export async function finishPairing(session: PairSession, mode: "use-local" | "u
   await syncNow();
 }
 
+export async function uploadBrowserCopy(): Promise<void> {
+  const state = await syncState();
+  if (!state.connection) throw new Error("Connect this browser before uploading its copy.");
+  const remote = await responseJson<ServerSnapshot>(await fetch(api(state.connection.serverUrl, "/snapshot"), {
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${state.connection.token}` }
+  }));
+  await connectToSnapshot({ ...state.connection, cursor: remote.cursor }, remote, "use-local");
+  await syncNow();
+}
+
 export async function cancelPairing(session: PairSession): Promise<void> {
   await fetch(api(session.connection.serverUrl, "/devices/current"), {
     method: "DELETE",
