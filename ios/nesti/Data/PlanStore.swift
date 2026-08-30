@@ -74,6 +74,30 @@ enum PlanStore {
         NotificationScheduler.shared.replaceReminder(for: task)
     }
 
+    static func uncomplete(_ completion: CompletionRecord, in context: ModelContext) {
+        guard let task = completion.task else {
+            context.delete(completion)
+            try? context.save()
+            return
+        }
+
+        let remainingCompletions = task.completions.filter { $0.id != completion.id }
+        let latestRemaining = remainingCompletions.max { $0.completedAt < $1.completedAt }
+        let isLatestCompletion = latestRemaining.map { $0.completedAt <= completion.completedAt } ?? true
+
+        if isLatestCompletion {
+            task.lastCompletedAt = latestRemaining?.completedAt
+            task.nextDueAt = completion.scheduledFor
+        }
+
+        context.delete(completion)
+        try? context.save()
+
+        if isLatestCompletion {
+            NotificationScheduler.shared.replaceReminder(for: task)
+        }
+    }
+
     static func deleteTask(_ task: CleaningTask, from context: ModelContext) {
         NotificationScheduler.shared.remove(for: task.id)
         context.delete(task)

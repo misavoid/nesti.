@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 import WidgetKit
 
 private struct NestiWidgetEntry: TimelineEntry {
@@ -94,118 +93,6 @@ private struct TodayTodosWidgetView: View {
     }
 }
 
-private struct CleanupGameWidgetView: View {
-    @Environment(\.widgetFamily) private var family
-    let entry: NestiWidgetEntry
-
-    private var pending: Int {
-        entry.snapshot?.tasksDueThroughToday(at: entry.date).count ?? 0
-    }
-
-    private var completed: Int {
-        entry.snapshot?.completedTaskIDs(at: entry.date).count ?? 0
-    }
-
-    private var total: Int { pending + completed }
-    private var progress: Double { total == 0 ? 1 : Double(completed) / Double(total) }
-
-    private var gameImage: UIImage? {
-        guard let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: NestiWidgetSnapshot.appGroupIdentifier
-        ) else { return nil }
-        return UIImage(contentsOfFile: containerURL
-            .appendingPathComponent(NestiWidgetSnapshot.gameImageFilename).path)
-    }
-
-    var body: some View {
-        if family == .systemSmall {
-            compactContent
-        } else {
-            VStack(alignment: .leading) {
-                Label("Island cleanup", systemImage: "gamecontroller.fill")
-                    .font(.headline)
-                Spacer()
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(statusTitle)
-                            .font(.title3.bold())
-                        Text(statusDetail)
-                            .font(.caption)
-                    }
-                    Spacer()
-                    progressMark
-                }
-            }
-            .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
-            .gameWidgetBackground(image: gameImage)
-            .widgetURL(URL(string: "nesti://play"))
-        }
-    }
-
-    private var compactContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("nesti.", systemImage: "gamecontroller.fill")
-                .font(.headline)
-            Spacer(minLength: 0)
-            progressMark
-            Text(statusTitle)
-                .font(.subheadline.bold())
-                .lineLimit(1)
-            Text(statusDetail)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .foregroundStyle(.white)
-        .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
-        .gameWidgetBackground(image: gameImage)
-        .widgetURL(URL(string: "nesti://play"))
-    }
-
-    private var progressMark: some View {
-        ZStack {
-            Circle()
-                .stroke(.white.opacity(0.32), lineWidth: 9)
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(pending == 0 ? .green : .cyan, style: StrokeStyle(lineWidth: 9, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            Image(systemName: pending == 0 ? "sparkles" : "leaf.fill")
-                .font(.title2)
-                .foregroundStyle(pending == 0 ? .green : .teal)
-        }
-        .frame(width: 66, height: 66)
-        .accessibilityLabel("\(completed) of \(total) cleanup tasks complete")
-    }
-
-    private var statusTitle: String {
-        if total == 0 { return "A clean start" }
-        if pending == 0 { return "Island clear" }
-        return "\(pending) left"
-    }
-
-    private var statusDetail: String {
-        total == 0 ? "Nothing due today" : "\(completed) of \(total) cleaned"
-    }
-}
-
-private extension View {
-    func gameWidgetBackground(image: UIImage?) -> some View {
-        containerBackground(for: .widget) {
-            ZStack {
-                Color(red: 0.20, green: 0.45, blue: 0.52)
-                if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                }
-                Color.black.opacity(0.18)
-            }
-        }
-    }
-}
-
 struct TodayTodosWidget: Widget {
     let kind = "TodayTodosWidget"
 
@@ -219,24 +106,10 @@ struct TodayTodosWidget: Widget {
     }
 }
 
-struct CleanupGameWidget: Widget {
-    let kind = "CleanupGameWidget"
-
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: NestiWidgetProvider()) { entry in
-            CleanupGameWidgetView(entry: entry)
-        }
-        .configurationDisplayName("Island cleanup")
-        .description("Your daily cleanup progress at a glance.")
-        .supportedFamilies([.systemSmall, .systemMedium])
-    }
-}
-
 @main
 struct NestiWidgetBundle: WidgetBundle {
     var body: some Widget {
         TodayTodosWidget()
-        CleanupGameWidget()
     }
 }
 

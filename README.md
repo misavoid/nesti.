@@ -1,6 +1,6 @@
 # nesti.
 
-`nesti.` is an offline-first iPhone, iPad, and Mac cleaning routine app built with SwiftUI and SwiftData. It organizes recurring cleaning tasks by room, highlights what is due, turns daily chores into a small cleanup game, and reveals patterns in when and how you clean. Import and export remain first-class workflows.
+`nesti.` is an offline-first cleaning routine project. The monorepo currently contains the iPhone, iPad, and Mac app built with SwiftUI and SwiftData, with space reserved for a future Astro web app. The native app organizes recurring cleaning tasks by room, highlights what is due, turns daily chores into a small cleanup game, and reveals patterns in when and how you clean. Import and export remain first-class workflows.
 
 ## Screenshots
 
@@ -100,7 +100,7 @@ Identifiers and export timestamps are optional for generated files; nesti. creat
 
 ## Run
 
-1. Open `nesti.xcodeproj` in Xcode.
+1. Open `ios/nesti.xcodeproj` in Xcode.
 2. Select the `nesti` scheme.
 3. Choose an iOS simulator or `My Mac (Mac Catalyst)` as the run destination.
 4. Build and run.
@@ -108,16 +108,18 @@ Identifiers and export timestamps are optional for generated files; nesti. creat
 The portable schedule and file-format tests can also run without Xcode:
 
 ```sh
-swift test
+swift test --package-path ios
 ```
 
 ## Structure
 
-- `Sources/NestiCore`: recurrence engine, versioned document schema, and validation
-- `nesti/Data`: SwiftData models and document mapping
-- `nesti/Services`: notifications and import/export support
-- `nesti/Features`: SwiftUI screens grouped by workflow
-- `Tests/NestiCoreTests`: portable unit tests
-- `docs`: architecture and `.nesti` format specification
+- `ios`: native app, widget extension, Swift package, tests, tools, samples, and assets
+- `ios/Sources/NestiCore`: recurrence engine, versioned document schema, and validation
+- `ios/nesti/Data`: SwiftData models and document mapping
+- `ios/nesti/Services`: notifications and import/export support
+- `ios/nesti/Features`: SwiftUI screens grouped by workflow
+- `ios/Tests/NestiCoreTests`: portable unit tests
+- `web`: reserved for the future Astro and Docker application
+- `docs`: repository-wide architecture and `.nesti` format specification
 
 See `docs/ARCHITECTURE.md` and `docs/NESTI_FORMAT.md` for design details.

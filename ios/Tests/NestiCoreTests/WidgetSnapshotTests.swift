@@ -33,7 +33,7 @@ final class WidgetSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.completedTaskIDs(at: now, calendar: calendar), [completedID])
     }
 
-    func testCompletionScheduledForFutureDateDoesNotAdvanceGameProgress() throws {
+    func testCompletionScheduledForFutureDateIsNotCountedToday() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
         let now = try XCTUnwrap(calendar.date(from: DateComponents(
