@@ -70,9 +70,9 @@ class WindowRateLimit {
   }
 }
 
-export type SyncService = Pick<SyncRepository, "ready" | "bootstrap" | "pair" | "issuePairingCode" | "authenticate" | "snapshot" | "sync" | "revoke">;
+export type SyncService = Pick<SyncRepository, "ready" | "bootstrap" | "enroll" | "pair" | "issuePairingCode" | "authenticate" | "snapshot" | "sync" | "revoke">;
 
-export function makeHttpServer(repository: SyncService) {
+export function makeHttpServer(repository: SyncService, openEnrollment = serverConfig.openEnrollment) {
   const pairingLimit = new WindowRateLimit(20, 60_000);
 
   return createServer(async (request, response) => {
@@ -99,7 +99,7 @@ export function makeHttpServer(repository: SyncService) {
         json(response, 200, {
           name: serverConfig.name,
           protocolVersions: [SYNC_PROTOCOL_VERSION],
-          authenticationMethods: ["pairing_code"],
+          authenticationMethods: openEnrollment ? ["open_enrollment"] : ["pairing_code"],
           limits: { maximumBodyBytes: serverConfig.maximumBodyBytes, maximumMutations: MAX_SYNC_MUTATIONS }
         }, requestId);
         return;
@@ -116,6 +116,15 @@ export function makeHttpServer(repository: SyncService) {
         if (!pairingLimit.take()) throw new ApiError(429, "rate_limited", "Too many setup attempts. Try again later.");
         const setup = parseBootstrapRequest(await readJson(request));
         const result = await repository.bootstrap(setup.homeName, setup.deviceName);
+        responseStatus = 201;
+        json(response, 201, { protocolVersion: SYNC_PROTOCOL_VERSION, ...result }, requestId);
+        return;
+      }
+      if (method === "POST" && path === "/api/sync/v1/enroll") {
+        if (!openEnrollment) throw new ApiError(403, "enrollment_disabled", "Open device enrollment is disabled.");
+        if (!pairingLimit.take()) throw new ApiError(429, "rate_limited", "Too many enrollment attempts. Try again later.");
+        const enrollment = parseBootstrapRequest(await readJson(request));
+        const result = await repository.enroll(enrollment.homeName, enrollment.deviceName);
         responseStatus = 201;
         json(response, 201, { protocolVersion: SYNC_PROTOCOL_VERSION, ...result }, requestId);
         return;

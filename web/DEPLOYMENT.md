@@ -58,7 +58,7 @@ docker compose exec -T db psql -U nesti_owner -d nesti -c "select count(*) as pr
 docker compose exec -T db psql -U nesti_owner -d nesti -c "select count(*) as attributed_completions from completion_records where deleted_at is null and profile_id is not null;"
 ```
 
-Repeat with the iOS app using a new pairing code and confirm changes from each client appear on the other before declaring the deployment complete.
+Connect the iOS app with the server URL and confirm changes from each client appear on the other before declaring the deployment complete.
 
 If the hostname does not resolve, compare the private records directly:
 
@@ -71,7 +71,7 @@ Traefik discovers the `nesti` routers through Docker labels, uses the existing `
 
 The one-shot `init-secrets` service provisions persistent credentials, and `migrate` owns schema changes and provisions the least-privilege `nesti_api` database role. The `sync-api` service starts only after migrations succeed. PostgreSQL is attached only to the internal `sync-data` network and stores its files in the `nesti-db-v2` named volume.
 
-The normal first-run flow is available in the website under Settings. Select **Set up this server** once; the browser becomes the first authorized device and displays a 15-minute, one-use pairing code. After setup, **Pair another device** generates subsequent codes for iOS or another browser.
+The Compose stack enables open enrollment because this deployment resolves to a private-network address. In Settings, select **Connect this browser**; additional web and iOS devices connect directly with the same server URL. Any device that can reach the server can join the home, so do not expose this configuration directly to the public internet.
 
 The equivalent administration commands remain available for recovery and scripted deployments:
 

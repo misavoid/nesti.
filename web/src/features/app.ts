@@ -1,7 +1,7 @@
 import {
   createIcons, Bell, BellOff, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronRight, CircleAlert,
   CircleCheck, CircleCheckBig, Clock, Cloud, CloudOff, Database, DoorOpen, Download, FileJson, Flame, Gamepad2, HardDrive, ListTodo,
-  Copy, KeyRound, MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Settings, ShieldCheck, Sparkles, Timer, Trash2, Unplug, Upload, UserRound, Users, X
+  MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Settings, ShieldCheck, Sparkles, Timer, Trash2, Unplug, Upload, UserRound, Users, X
 } from "lucide";
 import { calculateStatistics } from "../core/statistics";
 import { dateKey, dueLabel, formatDay, initialDueDate } from "../core/dates";
@@ -11,9 +11,9 @@ import type { SyncConflict, SyncConnection } from "../core/sync";
 import { completeTask, deleteProfile, deleteRoom, deleteTask, importDocument, resetDatabase, resolveConflict, saveProfile, saveRoom, saveSettings, saveTask, selectProfile, snapshot, syncState, undoCompletion } from "../data/db";
 import { downloadPlan, readPlan } from "../services/files";
 import { notifyDueTasks } from "../services/notifications";
-import { bootstrapServer, cancelPairing, createPairingCode, currentSyncStatus, disconnectFromServer, finishPairing, hasLocalPlan, observeSyncStatus, pairWithServer, scheduleSync, startSyncService, syncNow, type RuntimeSyncStatus } from "../services/sync";
+import { cancelPairing, currentSyncStatus, disconnectFromServer, enrollWithServer, finishPairing, hasLocalPlan, observeSyncStatus, scheduleSync, startSyncService, syncNow, type RuntimeSyncStatus } from "../services/sync";
 
-const iconSet = { Bell, BellOff, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronRight, CircleAlert, CircleCheck, CircleCheckBig, Clock, Cloud, CloudOff, Copy, Database, DoorOpen, Download, FileJson, Flame, Gamepad2, HardDrive, KeyRound, ListTodo, MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Settings, ShieldCheck, Sparkles, Timer, Trash2, Unplug, Upload, UserRound, Users, X };
+const iconSet = { Bell, BellOff, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronRight, CircleAlert, CircleCheck, CircleCheckBig, Clock, Cloud, CloudOff, Database, DoorOpen, Download, FileJson, Flame, Gamepad2, HardDrive, ListTodo, MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Settings, ShieldCheck, Sparkles, Timer, Trash2, Unplug, Upload, UserRound, Users, X };
 type View = "tasks" | "stats" | "play" | "settings";
 let data: AppSnapshot;
 let view: View = (location.hash.slice(1) as View) || "tasks";
@@ -70,10 +70,7 @@ function bindEvents(): void {
       if (action === "export") downloadPlan(data);
       if (action === "export-room" && id) downloadPlan(data, id);
       if (action === "notifications") await requestNotifications();
-      if (action === "sync-connect") byId<HTMLDialogElement>("sync-dialog").showModal();
-      if (action === "sync-bootstrap") await setupServer();
-      if (action === "sync-pairing-code") await showPairingCode();
-      if (action === "copy-pairing-code") await copyPairingCode();
+      if (action === "sync-connect") await connectToHostedServer();
       if (action === "sync-now") { await syncNow(); await refresh("Saved to server", false); }
       if (action === "sync-disconnect" && confirm("Disconnect this browser? Local data will remain available.")) { await disconnectFromServer(); await refresh("Browser disconnected", false); }
       if (action === "add-profile") openProfileDialog();
@@ -96,11 +93,6 @@ function bindEvents(): void {
   });
   byId<HTMLSelectElement>("task-form").addEventListener("change", (event) => {
     if ((event.target as HTMLInputElement).name === "scheduleType") renderScheduleFields((event.target as HTMLSelectElement).value);
-  });
-  byId<HTMLFormElement>("sync-form").addEventListener("submit", (event) => {
-    if ((event as SubmitEvent).submitter?.getAttribute("value") === "cancel") return;
-    event.preventDefault();
-    void submitSyncConnection();
   });
   window.addEventListener("hashchange", () => { const next = location.hash.slice(1) as View; if (next && next !== view) { view = next; render(); } });
 }
@@ -231,7 +223,7 @@ function renderSettings(): void {
     <section style="margin-top:30px"><div class="section-heading"><div><h2>Rooms</h2><p>${data.rooms.length} room${data.rooms.length === 1 ? "" : "s"}</p></div><button class="button secondary" data-action="add-room"><i data-lucide="plus"></i>Add room</button></div><div class="room-list">${data.rooms.map((room) => { const count = data.tasks.filter((task) => task.roomId === room.id).length; return `<article class="room-row"><span class="room-icon"><i data-lucide="door-open"></i></span><div><strong>${escape(room.name)}</strong><small>${count} task${count === 1 ? "" : "s"}${room.notes ? ` · ${escape(room.notes)}` : ""}</small></div><div class="room-actions"><button class="icon-button" data-action="export-room" data-id="${room.id}" aria-label="Export ${escape(room.name)}"><i data-lucide="download"></i></button><button class="icon-button" data-action="edit-room" data-id="${room.id}" aria-label="Edit ${escape(room.name)}"><i data-lucide="pencil"></i></button><button class="icon-button danger" data-action="delete-room" data-id="${room.id}" aria-label="Delete ${escape(room.name)}"><i data-lucide="trash-2"></i></button></div></article>`; }).join("") || `<p class="summary-line">No rooms yet.</p>`}</div></section>
     <section style="margin-top:30px"><div class="section-heading"><div><h2>Plan files</h2><p>Move plans between nesti. apps.</p></div></div><div class="settings-section"><div class="setting-row"><div><h3>Import .nesti plan</h3><p>Valid plans append after your confirmation.</p></div><button class="button secondary" data-action="import"><i data-lucide="upload"></i>Import</button></div><div class="setting-row"><div><h3>Export entire home</h3><p>Download a portable version 1 plan.</p></div><button class="button secondary" data-action="export" ${data.rooms.length ? "" : "disabled"}><i data-lucide="download"></i>Export</button></div></div></section>
     ${syncDetails.conflicts.length ? `<section style="margin-top:30px"><div class="section-heading"><div><h2>Sync conflicts</h2><p>Choose which version to keep.</p></div></div><div class="settings-section">${syncDetails.conflicts.map((conflict) => `<div class="setting-row"><div><h3>${escape(conflict.entityType)} changed in two places</h3><p>${escape(conflict.reason.replaceAll("_", " "))}</p></div><div class="inline-actions"><button class="button secondary" data-action="resolve-server" data-id="${conflict.id}">Use server</button>${conflict.reason !== "deleted" ? `<button class="button primary" data-action="resolve-local" data-id="${conflict.id}">Keep this device</button>` : ""}</div></div>`).join("")}</div></section>` : ""}
-  </div><aside><div class="storage-panel"><i data-lucide="${connection ? "database" : "shield-check"}"></i><h2>${connection ? "Saved to your server" : "Private by design"}</h2><p>${syncDescription}</p><div class="storage-facts"><span>${escape(syncRuntime.message)}</span>${connection ? `<span>Last saved: ${escape(lastSync)}</span><span>${syncDetails.pending} pending change${syncDetails.pending === 1 ? "" : "s"}</span>` : ""}</div>${connection ? `<button class="button secondary" data-action="sync-now"><i data-lucide="refresh-cw"></i>Save now</button><button class="button secondary" data-action="sync-pairing-code"><i data-lucide="key-round"></i>Pair another device</button><button class="button secondary" data-action="sync-disconnect"><i data-lucide="unplug"></i>Disconnect</button>` : `<button class="button secondary" data-action="sync-bootstrap"><i data-lucide="database"></i>Set up this server</button><button class="button secondary" data-action="sync-connect"><i data-lucide="key-round"></i>Enter pairing code</button>`}<button class="button secondary" data-action="notifications"><i data-lucide="${notificationState === "granted" ? "bell" : "bell-off"}"></i>${notificationState === "granted" ? "Reminders enabled" : notificationState === "unsupported" ? "Reminders unavailable" : "Enable reminders"}</button></div><div class="settings-section" style="margin-top:22px"><div class="setting-row"><div><h3>File format</h3><p>.nesti compatibility</p></div><strong>Version 1</strong></div><div class="setting-row"><div><h3>Delete local data</h3><p>This cannot be undone.</p></div><button class="button danger" data-action="reset">Delete</button></div></div></aside></div>`;
+  </div><aside><div class="storage-panel"><i data-lucide="${connection ? "database" : "shield-check"}"></i><h2>${connection ? "Saved to your server" : "Private by design"}</h2><p>${syncDescription}</p><div class="storage-facts"><span>${escape(syncRuntime.message)}</span>${connection ? `<span>Last saved: ${escape(lastSync)}</span><span>${syncDetails.pending} pending change${syncDetails.pending === 1 ? "" : "s"}</span>` : ""}</div>${connection ? `<button class="button secondary" data-action="sync-now"><i data-lucide="refresh-cw"></i>Save now</button><button class="button secondary" data-action="sync-disconnect"><i data-lucide="unplug"></i>Disconnect</button>` : `<button class="button secondary" data-action="sync-connect"><i data-lucide="cloud"></i>Connect this browser</button>`}<button class="button secondary" data-action="notifications"><i data-lucide="${notificationState === "granted" ? "bell" : "bell-off"}"></i>${notificationState === "granted" ? "Reminders enabled" : notificationState === "unsupported" ? "Reminders unavailable" : "Enable reminders"}</button></div><div class="settings-section" style="margin-top:22px"><div class="setting-row"><div><h3>File format</h3><p>.nesti compatibility</p></div><strong>Version 1</strong></div><div class="setting-row"><div><h3>Delete local data</h3><p>This cannot be undone.</p></div><button class="button danger" data-action="reset">Delete</button></div></div></aside></div>`;
   byId<HTMLInputElement>("home-name-input").addEventListener("change", async (event) => {
     const homeName = (event.target as HTMLInputElement).value.trim() || "My Home";
     await saveSettings({ id: "settings", homeName }); await refresh("Home name saved");
@@ -265,14 +257,9 @@ async function submitProfile(): Promise<void> {
   await refresh(existing ? "Profile updated" : "Profile added");
 }
 
-async function submitSyncConnection(): Promise<void> {
-  const form = byId<HTMLFormElement>("sync-form");
-  if (!form.reportValidity()) return;
-  const submit = form.querySelector<HTMLButtonElement>("[type=submit]")!;
-  submit.disabled = true;
+async function connectToHostedServer(): Promise<void> {
+  const session = await enrollWithServer(data.settings.homeName, "Web browser", location.origin);
   try {
-    const values = new FormData(form);
-    const session = await pairWithServer(String(values.get("code")), String(values.get("deviceName")), location.origin);
     const localHasData = await hasLocalPlan();
     const serverHasData = session.snapshot.rooms.length > 0 || session.snapshot.tasks.length > 0 || session.snapshot.completions.length > 0;
     let mode: "use-local" | "use-server" = localHasData && !serverHasData ? "use-local" : "use-server";
@@ -280,46 +267,16 @@ async function submitSyncConnection(): Promise<void> {
       const replace = confirm("This browser and the server both contain a plan. Continue to replace this browser's local plan with the server plan? Cancel to keep the local plan unchanged.");
       if (!replace) {
         await cancelPairing(session);
-        throw new Error("Connection cancelled. Your local plan was not changed.");
+        return;
       }
       mode = "use-server";
     }
     await finishPairing(session, mode);
-    form.reset();
-    byId<HTMLDialogElement>("sync-dialog").close();
     await refresh("Connected and saved to PostgreSQL", false);
-  } catch (error) {
-    toast(error instanceof Error ? error.message : "Could not connect to the sync server.", true);
-  } finally {
-    submit.disabled = false;
-  }
-}
-
-async function setupServer(): Promise<void> {
-  const session = await bootstrapServer(data.settings.homeName, "Web browser");
-  try {
-    await finishPairing(session, "use-local");
-    await refresh("Server set up and browser connected", false);
-    await showPairingCode();
   } catch (error) {
     await cancelPairing(session);
     throw error;
   }
-}
-
-async function showPairingCode(): Promise<void> {
-  const pairing = await createPairingCode();
-  byId("pairing-code").textContent = pairing.code;
-  byId("pairing-code-expiry").textContent = `One use, expires ${new Date(pairing.expiresAt).toLocaleString()}.`;
-  byId<HTMLDialogElement>("pairing-code-dialog").showModal();
-  icons();
-}
-
-async function copyPairingCode(): Promise<void> {
-  const code = byId("pairing-code").textContent?.trim();
-  if (!code) return;
-  await navigator.clipboard.writeText(code);
-  toast("Pairing code copied");
 }
 
 function openRoomDialog(room?: RoomRecord, note?: string): void {

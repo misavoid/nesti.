@@ -9,6 +9,14 @@ function integerEnvironment(name: string, fallback: number): number {
   return parsed;
 }
 
+function booleanEnvironment(name: string, fallback = false): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+  if (value == null || value === "") return fallback;
+  if (value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
+  throw new Error(`${name} must be true or false.`);
+}
+
 function secret(valueName: string, fileName: string): string | undefined {
   const file = process.env[fileName];
   if (file) return readFileSync(file, "utf8").trim();
@@ -38,6 +46,7 @@ export function runtimeDatabasePassword(): string {
 export const serverConfig = {
   port: integerEnvironment("PORT", 3000),
   name: process.env.NESTI_SERVER_NAME?.trim() || "nesti. self-hosted",
+  openEnrollment: booleanEnvironment("NESTI_OPEN_ENROLLMENT"),
   maximumBodyBytes: integerEnvironment("MAX_BODY_BYTES", 1_048_576),
   pairingPepper: secret("PAIRING_PEPPER", "PAIRING_PEPPER_FILE")
 };

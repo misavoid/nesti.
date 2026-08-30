@@ -56,7 +56,7 @@ final class SyncCoordinator {
         }
     }
 
-    func connect(serverAddress: String, pairingCode: String, replaceLocal: Bool = false) async throws {
+    func connect(serverAddress: String, replaceLocal: Bool = false) async throws {
         phase = .connecting
         message = "Connecting to server"
         let serverURL = try validatedServerURL(serverAddress)
@@ -64,7 +64,8 @@ final class SyncCoordinator {
         guard discovery.protocolVersions.contains(nestiSyncProtocolVersion) else {
             throw SyncError.unsupportedProtocol
         }
-        let paired = try await transport.pair(serverURL: serverURL, code: pairingCode, deviceName: UIDevice.current.name)
+        let homeName = UserDefaults.standard.string(forKey: "homeName") ?? "My Home"
+        let paired = try await transport.enroll(serverURL: serverURL, homeName: homeName, deviceName: UIDevice.current.name)
         let context = container.mainContext
         let localRooms = (try? context.fetch(FetchDescriptor<Room>())) ?? []
         let localHasData = !localRooms.isEmpty
@@ -91,7 +92,6 @@ final class SyncCoordinator {
             setRevision(type: .home, id: paired.homeId, revision: paired.snapshot.home.revision, in: context)
 
             if localHasData && !remoteHasData {
-                let homeName = UserDefaults.standard.string(forKey: "homeName") ?? "My Home"
                 SyncOutbox.enqueue(.home, id: paired.homeId, operation: .upsert, payload: SyncPayload(name: homeName), in: context)
                 for profile in (try? context.fetch(FetchDescriptor<UserProfile>())) ?? [] {
                     SyncOutbox.enqueue(.profile, id: profile.id, operation: .upsert, payload: SyncOutbox.payload(for: profile), in: context)

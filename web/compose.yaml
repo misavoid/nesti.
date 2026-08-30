@@ -49,6 +49,7 @@ services:
       DATABASE_USER: nesti_api
       DATABASE_PASSWORD_FILE: /run/secrets/db_api_password
       NESTI_SERVER_NAME: ${NESTI_SERVER_NAME:-nesti. self-hosted}
+      NESTI_OPEN_ENROLLMENT: "true"
       PAIRING_PEPPER_FILE: /run/secrets/pairing_pepper
       PORT: "3000"
     expose:

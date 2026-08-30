@@ -4,7 +4,7 @@
 
 This is a post-MVP plan for adding an optional, self-hosted nesti. sync service backed by PostgreSQL, then connecting the iOS and Mac Catalyst app to it. It does not change the MVP's offline-first guarantee, make an account mandatory, or turn the static Astro bundle into an application backend. A user who never configures sync must retain the current local-only behavior.
 
-The initial implementation is present: the PostgreSQL/API stack, browser IndexedDB outbox and pairing UI, native SwiftData outbox and Keychain transport, conflict handling, household profiles, and profile-attributed completions. Production release still requires the server-side migration/integration checks, backup restore drill, and two-client convergence exercise described below.
+The initial implementation is present: the PostgreSQL/API stack, browser IndexedDB outbox and open-enrollment UI, native SwiftData outbox and Keychain transport, conflict handling, household profiles, and profile-attributed completions. Production release still requires the server-side migration/integration checks, backup restore drill, and two-client convergence exercise described below.
 
 The first client delivery targets one home shared by the user's native devices. The Docker stack, sync API, native client, and web-client sync are separate workstreams using one documented protocol. For a connected home, PostgreSQL is the durable server authority while SwiftData and IndexedDB remain complete offline working copies.
 
@@ -31,12 +31,12 @@ The first client delivery targets one home shared by the user's native devices. 
 
 The server workstream must publish a versioned protocol specification and reference fixtures before the native client moves beyond a mocked transport. At minimum it must settle:
 
-- How an administrator creates a home and issues a short-lived pairing code or token.
+- How a private-network server enrolls devices and issues revocable device tokens.
 - The sync API implementation language and migration tool after a short operational and dependency review. PostgreSQL and the container boundary are fixed by this plan; the API framework is not.
 - Retention and backup policy for change history and deleted-record tombstones.
 - Whether a later release needs roles or invitations. The first client should treat every paired device as a full home editor.
 
-The recommended first authentication model is an opaque, revocable per-device bearer token obtained with a one-time pairing code. It avoids embedding a server administrator password in the app and leaves room for accounts later without requiring them now.
+The deployed private-network stack uses open enrollment to issue an opaque, revocable bearer token per device. Deployments reachable from the public internet must disable open enrollment and use the legacy one-time pairing-code flow or a future account/invitation model.
 
 ## Architecture
 
@@ -110,7 +110,7 @@ The coordinator should expose a small observable status model: disconnected, con
 Use HTTPS JSON endpoints under a versioned API prefix. Exact paths may change with the server specification, but the client needs these semantics:
 
 1. **Discovery:** return server identity, supported sync protocol versions, authentication methods, request limits, and capabilities. Discovery must not require a credential.
-2. **Pairing:** exchange a short-lived pairing code for a revocable device token plus remote home and device identifiers. Never return or persist an administrator credential.
+2. **Enrollment:** exchange the device name for a revocable device token plus remote home and device identifiers when private-network open enrollment is enabled. Never return or persist an administrator credential.
 3. **Snapshot:** return a fully validated home snapshot and its cursor for first connection or explicit recovery.
 4. **Sync:** accept the client's last cursor and an ordered batch of idempotent mutations, then atomically return acknowledgements, conflicts, remote changes, and a new cursor.
 5. **Device removal:** revoke the current device token without deleting local plan data.
@@ -125,7 +125,7 @@ The API writes accepted mutations, idempotency acknowledgements, entity revision
 
 ### First connection
 
-The connection flow is `Server URL` -> discovery -> pairing code -> home preview -> confirmation.
+The connection flow is `Server URL` -> discovery -> enrollment -> home preview -> confirmation.
 
 - With an empty local home, download and atomically install the remote snapshot.
 - With local data and a new empty remote home, upload the local snapshot while retaining all identifiers.

@@ -100,26 +100,6 @@ import "../styles/global.css";
       </form>
     </dialog>
 
-    <dialog id="sync-dialog" class="form-dialog" aria-labelledby="sync-dialog-title">
-      <form method="dialog" id="sync-form">
-        <header><div><p class="eyebrow">Self-hosted sync</p><h2 id="sync-dialog-title">Connect this browser</h2></div><button class="icon-button" value="cancel" aria-label="Close"><i data-lucide="x"></i></button></header>
-        <div class="form-grid">
-          <label class="span-2">Device name<input name="deviceName" required maxlength="200" value="Web browser" autocomplete="off" /></label>
-          <label class="span-2">Pairing code<input name="code" required minlength="8" maxlength="32" autocapitalize="characters" autocomplete="one-time-code" /></label>
-        </div>
-        <footer><button class="button secondary" value="cancel">Cancel</button><button class="button primary" type="submit"><i data-lucide="cloud"></i>Connect</button></footer>
-      </form>
-    </dialog>
-
-    <dialog id="pairing-code-dialog" class="form-dialog" aria-labelledby="pairing-code-dialog-title">
-      <form method="dialog">
-        <header><div><p class="eyebrow">Connect another device</p><h2 id="pairing-code-dialog-title">Pairing code</h2></div><button class="icon-button" value="cancel" aria-label="Close"><i data-lucide="x"></i></button></header>
-        <output id="pairing-code" class="pairing-code" aria-live="polite"></output>
-        <p id="pairing-code-expiry" class="import-note"></p>
-        <footer><button class="button secondary" type="button" data-action="copy-pairing-code"><i data-lucide="copy"></i>Copy</button><button class="button primary" value="done">Done</button></footer>
-      </form>
-    </dialog>
-
     <input id="file-input" type="file" accept=".nesti,application/json,application/vnd.nesti+json" hidden />
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script>

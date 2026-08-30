@@ -18,6 +18,7 @@ const snapshot: SyncSnapshot = {
 const service: SyncService = {
   ready: vi.fn(async () => undefined),
   bootstrap: vi.fn(async () => ({ deviceToken: "b".repeat(43), deviceId, homeId, snapshot })),
+  enroll: vi.fn(async () => ({ deviceToken: "c".repeat(43), deviceId, homeId, snapshot })),
   pair: vi.fn(async () => ({ deviceToken: "a".repeat(43), deviceId, homeId, snapshot })),
   issuePairingCode: vi.fn(async () => ({ code: "BCDE2345", expiresAt: "2030-01-01T00:00:00.000Z" })),
   authenticate: vi.fn(async () => ({ id: deviceId, homeId, name: "Test Device" })),
@@ -33,7 +34,7 @@ const service: SyncService = {
   revoke: vi.fn(async () => undefined)
 };
 
-const server = makeHttpServer(service);
+const server = makeHttpServer(service, true);
 let origin = "";
 
 beforeAll(async () => {
@@ -49,7 +50,7 @@ describe("sync HTTP API", () => {
   it("publishes discovery without authentication", async () => {
     const response = await fetch(`${origin}/api/sync/v1/discovery`);
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ protocolVersions: [1], authenticationMethods: ["pairing_code"] });
+    expect(await response.json()).toMatchObject({ protocolVersions: [1], authenticationMethods: ["open_enrollment"] });
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
@@ -77,6 +78,16 @@ describe("sync HTTP API", () => {
     });
     expect(response.status).toBe(201);
     expect(await response.json()).toMatchObject({ deviceToken: "b".repeat(43), homeId });
+  });
+
+  it("enrolls a device without a pairing code when enabled", async () => {
+    const response = await fetch(`${origin}/api/sync/v1/enroll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ homeName: "My Home", deviceName: "New Device" })
+    });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ deviceToken: "c".repeat(43), homeId });
   });
 
   it("lets an authenticated device issue a pairing code", async () => {

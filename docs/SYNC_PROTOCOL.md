@@ -12,9 +12,9 @@ All endpoints use HTTPS JSON under `/api/sync/v1`. UUIDs are canonical lowercase
 
 ## Pairing
 
-On an empty database, the website calls `POST /api/sync/v1/bootstrap` once to atomically create the home and authorize that browser. The endpoint returns `409 already_initialized` after any home exists. This first-run operation must be completed by the owner immediately after exposing a new server.
+When open enrollment is enabled, a client calls `POST /api/sync/v1/enroll` with its device name and preferred home name. The server atomically creates the home when the database is empty or joins the existing single home, then returns a revocable device token and complete snapshot. Open enrollment is suitable only when access to the server itself is restricted by a private network or VPN.
 
-An authorized device creates a 15-minute, one-use code at `POST /api/sync/v1/pairing-codes`. A new client exchanges it at `POST /api/sync/v1/pair`:
+Deployments that disable open enrollment can retain the legacy pairing-code flow. An authorized device creates a 15-minute, one-use code at `POST /api/sync/v1/pairing-codes`, and a new client exchanges it at `POST /api/sync/v1/pair`:
 
 ```json
 {

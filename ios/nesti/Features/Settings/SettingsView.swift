@@ -16,7 +16,6 @@ struct SettingsView: View {
     @State private var exportError: String?
     @State private var showingSyncConnection = false
     @State private var serverURL = "https://nesti.misavoid.dev"
-    @State private var pairingCode = ""
     @State private var replaceLocalData = false
     @State private var syncError: String?
     let onDocumentSelected: (URL) -> Void
@@ -129,8 +128,6 @@ struct SettingsView: View {
                                 .textInputAutocapitalization(.never)
                                 .keyboardType(.URL)
                                 .autocorrectionDisabled()
-                            SecureField("Pairing code", text: $pairingCode)
-                                .textInputAutocapitalization(.characters)
                         }
                         if !rooms.isEmpty {
                             Section {
@@ -146,7 +143,7 @@ struct SettingsView: View {
                         ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showingSyncConnection = false } }
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Connect") { connectToServer() }
-                                .disabled(serverURL.trimmed.isEmpty || pairingCode.trimmed.isEmpty || syncCoordinator.phase == .connecting)
+                                .disabled(serverURL.trimmed.isEmpty || syncCoordinator.phase == .connecting)
                         }
                     }
                 }
@@ -167,8 +164,7 @@ struct SettingsView: View {
     private func connectToServer() {
         Task {
             do {
-                try await syncCoordinator.connect(serverAddress: serverURL, pairingCode: pairingCode, replaceLocal: replaceLocalData)
-                pairingCode = ""
+                try await syncCoordinator.connect(serverAddress: serverURL, replaceLocal: replaceLocalData)
                 showingSyncConnection = false
             } catch {
                 syncError = error.localizedDescription

@@ -150,6 +150,32 @@ export class SyncRepository {
     });
   }
 
+  async enroll(homeName: string, deviceName: string): Promise<PairingResult> {
+    return withTransaction(this.pool, async (client) => {
+      await client.query("LOCK TABLE homes IN EXCLUSIVE MODE");
+      const homes = await client.query<{ id: string }>("SELECT id FROM homes ORDER BY updated_at, id LIMIT 2");
+      if (homes.rowCount && homes.rowCount > 1) throw new ApiError(409, "multiple_homes", "Open enrollment requires a single-home server.");
+
+      let homeId = homes.rows[0]?.id;
+      if (!homeId) {
+        homeId = randomUUID();
+        const revision = await this.nextRevision(client);
+        const payload = { name: homeName } satisfies HomePayload;
+        await client.query("INSERT INTO homes (id, name, revision) VALUES ($1, $2, $3)", [homeId, homeName, revision]);
+        await this.recordChange(client, homeId, "home", homeId, "upsert", revision, payload);
+      }
+
+      const deviceId = randomUUID();
+      const deviceToken = generateDeviceToken();
+      await client.query(
+        "INSERT INTO devices (id, home_id, name, token_hash) VALUES ($1, $2, $3, $4)",
+        [deviceId, homeId, deviceName, hashDeviceToken(deviceToken)]
+      );
+      const snapshot = await this.snapshotWithClient(client, homeId);
+      return { deviceToken, deviceId, homeId, snapshot };
+    });
+  }
+
   async issuePairingCode(homeId: string, validMinutes: number): Promise<{ code: string; expiresAt: string }> {
     const code = generatePairingCode();
     const expiresAt = new Date(Date.now() + validMinutes * 60_000);

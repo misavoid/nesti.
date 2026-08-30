@@ -18,6 +18,11 @@ struct SyncTransport {
         return try await send(serverURL: serverURL, path: "pair", method: "POST", token: nil, body: encoder.encode(Body(code: code, deviceName: deviceName)))
     }
 
+    func enroll(serverURL: URL, homeName: String, deviceName: String) async throws -> SyncPairResponse {
+        struct Body: Encodable { let homeName: String; let deviceName: String }
+        return try await send(serverURL: serverURL, path: "enroll", method: "POST", token: nil, body: encoder.encode(Body(homeName: homeName, deviceName: deviceName)))
+    }
+
     func sync(serverURL: URL, token: String, request: SyncRequest) async throws -> SyncResponse {
         try await send(serverURL: serverURL, path: "sync", method: "POST", token: token, body: encoder.encode(request))
     }

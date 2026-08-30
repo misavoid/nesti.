@@ -23,7 +23,7 @@ CI must run this suite against PostgreSQL. It covers pairing-code consumption, m
 
 ## Administration
 
-For normal deployments, initialize an empty server from the website's Settings view. The first browser becomes an authorized device and can issue pairing codes for other devices. Initialization is permanently disabled as soon as the database contains a home.
+The nesti. Compose stack enables open enrollment for its private-network deployment. A web or iOS client connects by server URL and receives a revocable device token plus the current home snapshot. Pairing-code commands remain available for deployments that disable open enrollment.
 
 After compiling and configuring the database environment:
 

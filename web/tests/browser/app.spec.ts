@@ -49,37 +49,32 @@ test("shows when browser data is committed to PostgreSQL", async ({ page }, test
   await page.evaluate(async () => { for (const registration of await navigator.serviceWorker.getRegistrations()) await registration.unregister(); });
   await page.reload();
   await page.route("**/api/sync/v1/discovery", (route) => route.fulfill({ json: { name: "Home Server", protocolVersions: [1], authenticationMethods: ["pairing_code"], limits: {} } }));
-  await page.route("**/api/sync/v1/pair", (route) => route.fulfill({ status: 201, json: {
+  await page.route("**/api/sync/v1/enroll", (route) => route.fulfill({ status: 201, json: {
     protocolVersion: 1, deviceToken: "a".repeat(43), deviceId: "c86c28e1-f104-49a0-b780-5daec591b794", homeId,
     snapshot: { protocolVersion: 1, cursor: "2", home: { id: homeId, revision: "1", payload: { name: "Synced Home" } }, profiles: [{ id: profileId, revision: "2", payload: { name: "Alex", color: "#147d64", sortOrder: 0 } }], rooms: [], tasks: [], completions: [] }
   } }));
   await page.route("**/api/sync/v1/sync", (route) => route.fulfill({ json: { protocolVersion: 1, cursor: "2", hasMore: false, acknowledgements: [], conflicts: [], changes: [] } }));
   await page.getByRole("button", { name: "Settings" }).last().click();
-  await page.getByRole("button", { name: "Enter pairing code" }).click();
-  const dialog = page.getByRole("dialog", { name: "Connect this browser" });
-  await dialog.getByLabel("Pairing code").fill("ABCD2345");
-  await dialog.getByRole("button", { name: "Connect" }).click();
+  await page.getByRole("button", { name: "Connect this browser" }).click();
   await expect(page.getByRole("heading", { name: "Saved to your server" })).toBeVisible();
   await expect(page.locator("#sync-indicator").getByText(/Saved to PostgreSQL on Home Server/)).toBeVisible();
 });
 
-test("sets up an empty server and displays a pairing code", async ({ page }, testInfo) => {
+test("connects another browser without a pairing code", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === "mobile", "Playwright WebKit cannot reliably route service-worker API requests to a mocked sync server.");
   const homeId = "421c47d7-91a1-4ea9-a70b-7dbe85ed149e";
   await page.evaluate(async () => { for (const registration of await navigator.serviceWorker.getRegistrations()) await registration.unregister(); });
   await page.reload();
   await page.route("**/api/sync/v1/discovery", (route) => route.fulfill({ json: { name: "Home Server", protocolVersions: [1], authenticationMethods: ["pairing_code"], limits: {} } }));
-  await page.route("**/api/sync/v1/bootstrap", (route) => route.fulfill({ status: 201, json: {
+  await page.route("**/api/sync/v1/enroll", (route) => route.fulfill({ status: 201, json: {
     protocolVersion: 1, deviceToken: "b".repeat(43), deviceId: "c86c28e1-f104-49a0-b780-5daec591b794", homeId,
     snapshot: { protocolVersion: 1, cursor: "1", home: { id: homeId, revision: "1", payload: { name: "My Home" } }, profiles: [], rooms: [], tasks: [], completions: [] }
   } }));
   await page.route("**/api/sync/v1/sync", (route) => route.fulfill({ json: { protocolVersion: 1, cursor: "1", hasMore: false, acknowledgements: [], conflicts: [], changes: [] } }));
-  await page.route("**/api/sync/v1/pairing-codes", (route) => route.fulfill({ status: 201, json: { code: "BCDE2345", expiresAt: "2030-01-01T00:00:00.000Z" } }));
   await page.getByRole("button", { name: "Settings" }).last().click();
-  await page.getByRole("button", { name: "Set up this server" }).click();
-  await expect(page.getByRole("dialog", { name: "Pairing code" })).toBeVisible();
-  await expect(page.locator("#pairing-code")).toHaveText("BCDE2345");
-  await page.screenshot({ path: testInfo.outputPath("pairing-code.png"), fullPage: true });
+  await page.getByRole("button", { name: "Connect this browser" }).click();
+  await expect(page.getByRole("heading", { name: "Saved to your server" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("open-enrollment.png"), fullPage: true });
 });
 
 test("previews, appends, and exports a .nesti plan", async ({ page }) => {
