@@ -28,7 +28,7 @@ If the shared proxy network has a different name, create `web/.env` from `web/.e
 
 ### Full stack
 
-The one-shot `init-secrets` service creates the database passwords and pairing pepper during the first deployment. They persist in the `nesti-secrets` named volume; no host files or preparatory shell commands are required. Back up that volume together with the database volume.
+The one-shot `init-secrets` service creates the database passwords and pairing pepper during the first deployment. They persist as read-only files in the private `nesti-secrets` named volume, which is mounted only by the services that need them; no host files or preparatory shell commands are required. Back up that volume together with the database volume.
 
 Run from `web/` so Compose automatically reads its `.env` file:
 

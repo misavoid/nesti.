@@ -12,6 +12,7 @@ services:
           if [ ! -s "/run/nesti-secrets/$$name" ]; then
             head -c 48 /dev/urandom | base64 | tr -d '\n' > "/run/nesti-secrets/$$name"
           fi
+          chmod 0444 "/run/nesti-secrets/$$name"
         done
     volumes:
       - nesti-secrets:/run/nesti-secrets
