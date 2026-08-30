@@ -19,8 +19,10 @@ private enum StatisticsPeriod: String, CaseIterable, Identifiable {
 }
 
 struct StatisticsView: View {
+    @Environment(SyncCoordinator.self) private var syncCoordinator
     @Query private var tasks: [CleaningTask]
     @Query private var completions: [CompletionRecord]
+    @AppStorage("activeProfileID") private var activeProfileID = ""
     @State private var period: StatisticsPeriod = .month
 
     private let now = Date()
@@ -61,6 +63,7 @@ struct StatisticsView: View {
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Stats")
         }
+        .refreshable { try? await syncCoordinator.syncNow() }
     }
 
     private var report: CleaningStatistics {
@@ -75,7 +78,7 @@ struct StatisticsView: View {
                     nextDueAt: task.nextDueAt
                 )
             },
-            completions: completions.map {
+            completions: completions.filter { activeProfileID.isEmpty || $0.profile?.id.uuidString == activeProfileID }.map {
                 StatisticsCompletion(completedAt: $0.completedAt, scheduledFor: $0.scheduledFor, taskID: $0.task?.id)
             },
             from: period.startDate(relativeTo: now, calendar: .current),

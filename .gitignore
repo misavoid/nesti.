@@ -18,3 +18,7 @@ web/test-results/
 web/playwright-report/
 web/.env
 web/.env.local
+web/secrets/
+server/node_modules/
+server/dist/
+server/.env

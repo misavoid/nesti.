@@ -1,5 +1,5 @@
 // @ts-nocheck
-const CACHE = "nesti-shell-v2";
+const CACHE = "nesti-shell-v10";
 const SHELL = ["/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/models/FloatingIsland.glb"];
 
 async function precache() {
@@ -22,7 +22,8 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (event.request.method !== "GET" || url.pathname.startsWith("/api/")) return;
   event.respondWith(
     fetch(event.request)
       .then((response) => {

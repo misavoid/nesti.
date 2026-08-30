@@ -2,13 +2,13 @@
 
 ## Implementation status
 
-The planned MVP is implemented on the `docs/web-migration-plan` branch. The Astro app, IndexedDB persistence, `.nesti` import/export, statistics, progressive reminders, Three.js Play view, service worker, Docker delivery files, shared Swift/TypeScript recurrence fixtures, and browser checks are present. The phases below remain the maintenance and release checklist for future changes.
+The planned MVP is implemented on the `docs/web-migration-plan` branch. The Astro app, IndexedDB persistence, `.nesti` import/export, statistics, progressive reminders, Three.js Play view, service worker, Docker delivery files, shared Swift/TypeScript recurrence fixtures, and browser checks are present. The phases below remain the local-only maintenance and release checklist. The optional PostgreSQL-backed server and web/native synchronization follow-up is specified in `docs/IOS_SERVER_SYNC_PLAN.md`.
 
 ## Goal
 
 Translate the existing nesti. iOS and Mac Catalyst experience into an installable Astro web app served by Docker. The web app must remain local-only and usable without a connection after its first load. It must read and write `.nesti` version 1 files that round-trip with the native app.
 
-This plan does not introduce a server-side application, user accounts, synchronization, analytics, or cloud storage. Docker serves versioned static assets; the browser owns all user data and application behavior.
+This MVP plan does not introduce a server-side application, user accounts, synchronization, analytics, or cloud storage. Docker serves versioned static assets; the browser owns all user data and application behavior until the optional sync plan is implemented and the browser is explicitly paired.
 
 ## Success criteria
 
@@ -29,7 +29,7 @@ This plan does not introduce a server-side application, user accounts, synchroni
 - Serve the generated `dist/` directory from an unprivileged static web server in the production image.
 - Cache hashed Astro assets for a long duration, but always revalidate HTML, the web manifest, and the service worker so releases can update cleanly.
 - Add a web app manifest and service worker. Precache the app shell and all required local assets; do not depend on CDNs, remote fonts, or remote images at runtime.
-- Keep Docker Compose optional and limited to local production-parity serving. There is no database or backend container.
+- Keep the MVP Docker Compose configuration limited to local production-parity serving. The later optional sync stack adds separate API and PostgreSQL containers without changing the static Astro output mode.
 
 ### Application layers
 
@@ -151,7 +151,7 @@ CI should run the portable Swift suite whenever shared compatibility fixtures ch
 
 ## Explicitly deferred
 
-- Accounts, authentication, shared homes, cloud synchronization, analytics, telemetry, subscriptions, and a server-side database.
+- For this MVP: accounts, authentication, shared homes, synchronization, analytics, telemetry, subscriptions, and a server-side database. Optional self-hosted sync is a separate follow-up plan.
 - Automatic transfer of a native app's private SwiftData store into a browser. Users transfer plans through `.nesti` files.
 - Guaranteed background notifications on every browser. Browser and operating-system support varies, so reminders remain progressive enhancement.
 - Changes to `.nesti` version 1 solely to simplify the TypeScript implementation. Any future schema change must be designed for both native and web readers and covered by compatibility fixtures.

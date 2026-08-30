@@ -11,9 +11,12 @@ private enum TaskScope: String, CaseIterable, Identifiable {
 
 struct TaskDashboardView: View {
     @Environment(\.modelContext) private var context
+    @Environment(SyncCoordinator.self) private var syncCoordinator
     @Query private var allTasks: [CleaningTask]
     @Query(sort: \CompletionRecord.completedAt, order: .reverse) private var completions: [CompletionRecord]
     @Query(sort: \Room.sortOrder) private var rooms: [Room]
+    @Query(sort: \UserProfile.sortOrder) private var profiles: [UserProfile]
+    @AppStorage("activeProfileID") private var activeProfileID = ""
     @State private var scope: TaskScope = .due
     @State private var editingTask: CleaningTask?
     @State private var showingNewTask = false
@@ -43,11 +46,16 @@ struct TaskDashboardView: View {
                 if scope == .done {
                     doneContent
                 } else if displayedTasks.isEmpty {
-                    ContentUnavailableView(
-                        emptyTitle,
-                        systemImage: scope == .overdue ? "checkmark.seal" : "sparkles",
-                        description: Text(emptyDescription)
-                    )
+                    List {
+                        ContentUnavailableView(
+                            emptyTitle,
+                            systemImage: scope == .overdue ? "checkmark.seal" : "sparkles",
+                            description: Text(emptyDescription)
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
+                    .listStyle(.plain)
                 } else {
                     List {
                         ForEach(groupedTasks, id: \.0) { section, tasks in
@@ -76,6 +84,16 @@ struct TaskDashboardView: View {
             }
             .navigationTitle("nesti.")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Picker("Active profile", selection: $activeProfileID) {
+                            ForEach(profiles) { profile in Text(profile.name).tag(profile.id.uuidString) }
+                        }
+                    } label: {
+                        Label(activeProfileName, systemImage: "person.crop.circle")
+                    }
+                    .accessibilityLabel("Active profile, \(activeProfileName)")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingNewTask = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Add task")
@@ -85,6 +103,11 @@ struct TaskDashboardView: View {
             .sheet(isPresented: $showingNewTask) { TaskEditorView(task: nil, initialRoom: rooms.first) }
             .sheet(item: $editingTask) { TaskEditorView(task: $0, initialRoom: $0.room) }
         }
+        .refreshable { try? await syncCoordinator.syncNow() }
+    }
+
+    private var activeProfileName: String {
+        profiles.first(where: { $0.id.uuidString == activeProfileID })?.name ?? profiles.first?.name ?? "Profile"
     }
 
     private var groupedTasks: [(String, [CleaningTask])] {
@@ -95,11 +118,16 @@ struct TaskDashboardView: View {
     @ViewBuilder
     private var doneContent: some View {
         if completions.isEmpty {
-            ContentUnavailableView(
-                "Nothing done yet",
-                systemImage: "checkmark.circle",
-                description: Text("Completed tasks will appear here.")
-            )
+            List {
+                ContentUnavailableView(
+                    "Nothing done yet",
+                    systemImage: "checkmark.circle",
+                    description: Text("Completed tasks will appear here.")
+                )
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
+            .listStyle(.plain)
         } else {
             List {
                 ForEach(groupedCompletions, id: \.day) { group in
@@ -179,6 +207,9 @@ private struct CompletedTaskRow: View {
                         completion.completedAt.formatted(.dateTime.hour().minute()),
                         systemImage: "clock"
                     )
+                    if let profile = completion.profile {
+                        Label(profile.name, systemImage: "person")
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

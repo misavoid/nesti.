@@ -27,7 +27,7 @@ import "../styles/global.css";
           <button class="nav-item" data-view="play"><i data-lucide="gamepad-2"></i><span>Play</span></button>
           <button class="nav-item" data-view="settings"><i data-lucide="settings"></i><span>Settings</span></button>
         </nav>
-        <div class="privacy-note"><i data-lucide="hard-drive"></i><span>Saved on this device</span></div>
+        <div class="privacy-note" id="sync-indicator"><i data-lucide="hard-drive"></i><span>Saved in this browser</span></div>
       </aside>
 
       <div class="workspace">
@@ -85,6 +85,18 @@ import "../styles/global.css";
         <header><div><p class="eyebrow">Review before saving</p><h2>Import plan</h2></div><button class="icon-button" value="cancel" aria-label="Close"><i data-lucide="x"></i></button></header>
         <div id="import-summary"></div>
         <footer><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="import" id="confirm-import">Append plan</button></footer>
+      </form>
+    </dialog>
+
+    <dialog id="profile-dialog" class="form-dialog" aria-labelledby="profile-dialog-title">
+      <form method="dialog" id="profile-form">
+        <input type="hidden" name="id" />
+        <header><div><p class="eyebrow">Household profile</p><h2 id="profile-dialog-title">New profile</h2></div><button class="icon-button" value="cancel" aria-label="Close"><i data-lucide="x"></i></button></header>
+        <div class="form-grid">
+          <label>Name<input name="name" required maxlength="100" autocomplete="name" /></label>
+          <label>Color<input name="color" type="color" value="#147d64" aria-label="Profile color" /></label>
+        </div>
+        <footer><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="save" data-submit-profile>Save profile</button></footer>
       </form>
     </dialog>
 

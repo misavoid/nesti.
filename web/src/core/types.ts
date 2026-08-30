@@ -38,19 +38,29 @@ export interface RoomRecord {
 export interface CompletionRecord {
   id: string;
   taskId: string;
+  profileId?: string;
   completedAt: string;
   scheduledFor?: string;
+}
+
+export interface ProfileRecord {
+  id: string;
+  name: string;
+  color: string;
+  sortOrder: number;
 }
 
 export interface SettingsRecord {
   id: "settings";
   homeName: string;
+  activeProfileId?: string;
 }
 
 export interface AppSnapshot {
   rooms: RoomRecord[];
   tasks: TaskRecord[];
   completions: CompletionRecord[];
+  profiles: ProfileRecord[];
   settings: SettingsRecord;
 }
 

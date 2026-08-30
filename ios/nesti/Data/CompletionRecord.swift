@@ -7,11 +7,13 @@ final class CompletionRecord {
     var completedAt: Date
     var scheduledFor: Date?
     var task: CleaningTask?
+    var profile: UserProfile?
 
-    init(id: UUID = UUID(), completedAt: Date = Date(), scheduledFor: Date? = nil, task: CleaningTask? = nil) {
+    init(id: UUID = UUID(), completedAt: Date = Date(), scheduledFor: Date? = nil, task: CleaningTask? = nil, profile: UserProfile? = nil) {
         self.id = id
         self.completedAt = completedAt
         self.scheduledFor = scheduledFor
         self.task = task
+        self.profile = profile
     }
 }

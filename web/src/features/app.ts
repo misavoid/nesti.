@@ -1,17 +1,19 @@
 import {
   createIcons, Bell, BellOff, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronRight, CircleAlert,
-  CircleCheck, CircleCheckBig, Clock, DoorOpen, Download, FileJson, Flame, Gamepad2, HardDrive, ListTodo,
-  MoreHorizontal, Pencil, Plus, RotateCcw, Settings, ShieldCheck, Sparkles, Timer, Trash2, Upload, X
+  CircleCheck, CircleCheckBig, Clock, Cloud, CloudOff, Database, DoorOpen, Download, FileJson, Flame, Gamepad2, HardDrive, ListTodo,
+  MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Settings, ShieldCheck, Sparkles, Timer, Trash2, Unplug, Upload, UserRound, Users, X
 } from "lucide";
 import { calculateStatistics } from "../core/statistics";
 import { dateKey, dueLabel, formatDay, initialDueDate } from "../core/dates";
 import { documentSummary } from "../core/codec";
-import type { AppSnapshot, NestiDocument, RecurrenceBasis, RecurrenceRule, RoomRecord, TaskRecord, Weekday } from "../core/types";
-import { completeTask, deleteRoom, deleteTask, importDocument, resetDatabase, saveRoom, saveSettings, saveTask, snapshot, undoCompletion } from "../data/db";
+import type { AppSnapshot, NestiDocument, ProfileRecord, RecurrenceBasis, RecurrenceRule, RoomRecord, TaskRecord, Weekday } from "../core/types";
+import type { SyncConflict, SyncConnection } from "../core/sync";
+import { completeTask, deleteProfile, deleteRoom, deleteTask, importDocument, resetDatabase, resolveConflict, saveProfile, saveRoom, saveSettings, saveTask, selectProfile, snapshot, syncState, undoCompletion } from "../data/db";
 import { downloadPlan, readPlan } from "../services/files";
 import { notifyDueTasks } from "../services/notifications";
+import { currentSyncStatus, disconnectFromServer, observeSyncedData, observeSyncStatus, reconcileHostedCopy, scheduleSync, startSyncService, syncNow, type RuntimeSyncStatus } from "../services/sync";
 
-const iconSet = { Bell, BellOff, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronRight, CircleAlert, CircleCheck, CircleCheckBig, Clock, DoorOpen, Download, FileJson, Flame, Gamepad2, HardDrive, ListTodo, MoreHorizontal, Pencil, Plus, RotateCcw, Settings, ShieldCheck, Sparkles, Timer, Trash2, Upload, X };
+const iconSet = { Bell, BellOff, CalendarDays, ChartNoAxesColumnIncreasing, Check, ChevronRight, CircleAlert, CircleCheck, CircleCheckBig, Clock, Cloud, CloudOff, Database, DoorOpen, Download, FileJson, Flame, Gamepad2, HardDrive, ListTodo, MoreHorizontal, Pencil, Plus, RefreshCw, RotateCcw, Settings, ShieldCheck, Sparkles, Timer, Trash2, Unplug, Upload, UserRound, Users, X };
 type View = "tasks" | "stats" | "play" | "settings";
 let data: AppSnapshot;
 let view: View = (location.hash.slice(1) as View) || "tasks";
@@ -19,6 +21,8 @@ let taskFilter: "due" | "all" = "due";
 let statsRange: "30" | "90" | "all" = "30";
 let pendingImport: NestiDocument | undefined;
 let gameModule: typeof import("./game") | undefined;
+let syncDetails: { connection?: SyncConnection; pending: number; conflicts: SyncConflict[] } = { pending: 0, conflicts: [] };
+let syncRuntime: RuntimeSyncStatus = currentSyncStatus();
 
 const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const escape = (value: unknown) => String(value ?? "").replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character]!);
@@ -27,9 +31,16 @@ const icons = () => createIcons({ icons: iconSet, attrs: { "aria-hidden": "true"
 
 export async function startApp(): Promise<void> {
   if (!(view in { tasks: 1, stats: 1, play: 1, settings: 1 })) view = "tasks";
-  data = await snapshot();
+  [data, syncDetails] = await Promise.all([snapshot(), syncState()]);
   bindEvents();
+  observeSyncStatus((status) => {
+    syncRuntime = status;
+    void syncState().then((state) => { syncDetails = state; updateSyncIndicators(); if (view === "settings") render(); });
+  });
+  observeSyncedData(() => { void refresh(undefined, false); });
   await requestPersistentStorage();
+  await startSyncService(data.settings.homeName);
+  [data, syncDetails] = await Promise.all([snapshot(), syncState()]);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
   render();
   notifyDueTasks(data);
@@ -61,9 +72,18 @@ function bindEvents(): void {
       if (action === "export") downloadPlan(data);
       if (action === "export-room" && id) downloadPlan(data, id);
       if (action === "notifications") await requestNotifications();
+      if (action === "sync-connect") { await reconcileHostedCopy(data.settings.homeName); await refresh("Loaded from PostgreSQL", false); }
+      if (action === "sync-now") { await syncNow(); await refresh("Saved to server", false); }
+      if (action === "sync-disconnect" && confirm("Disconnect this browser? Local data will remain available.")) { await disconnectFromServer(); await refresh("Browser disconnected", false); }
+      if (action === "add-profile") openProfileDialog();
+      if (action === "edit-profile" && id) openProfileDialog(data.profiles.find((profile) => profile.id === id));
+      if (action === "delete-profile" && id && confirm("Remove this profile? Existing completion records will remain.")) { await deleteProfile(id); await refresh("Profile removed"); }
+      if (action === "resolve-server" && id) { await resolveConflict(id, "server"); await syncNow(); await refresh("Server version applied", false); }
+      if (action === "resolve-local" && id) { await resolveConflict(id, "local"); await syncNow(); await refresh("Local version saved", false); }
       if (action === "reset" && confirm("Permanently delete all rooms, tasks, and completion history on this device?")) { await resetDatabase(); await refresh("Local data deleted"); }
       if (button.hasAttribute("data-submit-room")) { event.preventDefault(); await submitRoom(); }
       if (button.hasAttribute("data-submit-task")) { event.preventDefault(); await submitTask(); }
+      if (button.hasAttribute("data-submit-profile")) { event.preventDefault(); await submitProfile(); }
     } catch (error) { toast(error instanceof Error ? error.message : "Something went wrong.", true); }
   });
   byId<HTMLInputElement>("file-input").addEventListener("change", handleFile);
@@ -86,7 +106,13 @@ function navigate(next: View): void {
   byId("app-content").focus({ preventScroll: true });
 }
 
-async function refresh(message?: string): Promise<void> { data = await snapshot(); render(); notifyDueTasks(data); if (message) toast(message); }
+async function refresh(message?: string, queueSync = true): Promise<void> {
+  [data, syncDetails] = await Promise.all([snapshot(), syncState()]);
+  render();
+  notifyDueTasks(data);
+  if (queueSync) scheduleSync();
+  if (message) toast(message);
+}
 
 function render(): void {
   gameModule?.unmountGame();
@@ -95,11 +121,28 @@ function render(): void {
   byId("home-name").textContent = data.settings.homeName;
   const dueCount = data.tasks.filter((task) => task.nextDueDate && task.nextDueDate <= dateKey()).length;
   const badge = byId("due-badge"); badge.textContent = String(dueCount); badge.hidden = dueCount === 0;
-  byId("topbar-actions").innerHTML = view === "tasks" ? `<button class="button primary" data-action="add-task" aria-label="New task"><i data-lucide="plus"></i><span>New task</span></button>` : view === "settings" ? `<button class="button primary" data-action="add-room" aria-label="New room"><i data-lucide="plus"></i><span>New room</span></button>` : "";
+  const activeProfile = data.profiles.find((profile) => profile.id === data.settings.activeProfileId) ?? data.profiles[0];
+  const profilePicker = `<label class="profile-picker" title="Active profile"><span style="--profile-color:${escape(activeProfile?.color ?? "#147d64")}"></span><select id="active-profile-select" aria-label="Active profile">${data.profiles.map((profile) => `<option value="${profile.id}" ${profile.id === activeProfile?.id ? "selected" : ""}>${escape(profile.name)}</option>`).join("")}</select></label>`;
+  const command = view === "tasks" ? `<button class="button primary" data-action="add-task" aria-label="New task"><i data-lucide="plus"></i><span>New task</span></button>` : view === "settings" ? `<button class="button primary" data-action="add-room" aria-label="New room"><i data-lucide="plus"></i><span>New room</span></button>` : "";
+  byId("topbar-actions").innerHTML = `${profilePicker}${command}`;
   if (view === "tasks") renderTasks();
   if (view === "stats") renderStats();
   if (view === "play") renderPlay();
   if (view === "settings") renderSettings();
+  icons();
+  byId<HTMLSelectElement>("active-profile-select").addEventListener("change", async (event) => {
+    await selectProfile((event.target as HTMLSelectElement).value);
+    await refresh(undefined, false);
+  });
+  updateSyncIndicators();
+}
+
+function updateSyncIndicators(): void {
+  const indicator = document.getElementById("sync-indicator");
+  if (!indicator) return;
+  const icon = syncRuntime.phase === "synced" ? "database" : syncRuntime.phase === "local" ? "hard-drive" : syncRuntime.phase === "offline" ? "cloud-off" : "cloud";
+  indicator.innerHTML = `<i data-lucide="${icon}"></i><span>${escape(syncRuntime.message)}</span>`;
+  indicator.className = `privacy-note sync-${syncRuntime.phase}`;
   icons();
 }
 
@@ -107,7 +150,7 @@ function renderTasks(): void {
   const today = dateKey();
   const visible = data.tasks.filter((task) => taskFilter === "all" || (task.nextDueDate && task.nextDueDate <= today)).sort((a, b) => (a.nextDueDate ?? "9999").localeCompare(b.nextDueDate ?? "9999") || a.name.localeCompare(b.name));
   if (!data.tasks.length) {
-    byId("app-content").innerHTML = emptyState("sparkles", "Build your cleaning rhythm", "Add a room, then create recurring tasks. Everything stays on this device.", "Add a room", "add-room");
+    byId("app-content").innerHTML = emptyState("sparkles", "Build your cleaning rhythm", "Add a room, then create recurring tasks. Changes remain available offline.", "Add a room", "add-room");
     return;
   }
   const groups = new Map<string, TaskRecord[]>();
@@ -133,11 +176,13 @@ function taskRow(task: TaskRecord, completed = false): string {
 }
 
 function renderStats(): void {
-  const stats = calculateStatistics(data, statsRange);
-  if (!data.completions.length) { byId("app-content").innerHTML = emptyState("chart-no-axes-column-increasing", "Your patterns will appear here", "Complete a few tasks to reveal streaks, timing, rooms, and cleaning momentum."); return; }
+  const profile = data.profiles.find((item) => item.id === data.settings.activeProfileId);
+  const profileCompletions = data.completions.filter((completion) => !profile || completion.profileId === profile.id);
+  const stats = calculateStatistics({ ...data, completions: profileCompletions }, statsRange);
+  if (!profileCompletions.length) { byId("app-content").innerHTML = emptyState("chart-no-axes-column-increasing", "Your patterns will appear here", `Complete a few tasks as ${escape(profile?.name ?? "this profile")} to reveal streaks, timing, rooms, and cleaning momentum.`); return; }
   const maxActivity = Math.max(1, ...stats.activity.map((day) => day.count));
   byId("app-content").innerHTML = `
-    <div class="filter-bar"><div class="segmented" aria-label="Statistics range">${(["30", "90", "all"] as const).map((range) => `<button class="${statsRange === range ? "active" : ""}" data-action="range" data-range="${range}">${range === "all" ? "All time" : `${range} days`}</button>`).join("")}</div><span class="summary-line">Updated locally</span></div>
+    <div class="filter-bar"><div class="segmented" aria-label="Statistics range">${(["30", "90", "all"] as const).map((range) => `<button class="${statsRange === range ? "active" : ""}" data-action="range" data-range="${range}">${range === "all" ? "All time" : `${range} days`}</button>`).join("")}</div><span class="summary-line">${escape(profile?.name ?? "Profile")} activity</span></div>
     <div class="metric-grid">
       ${metric("circle-check-big", stats.completionCount, "Tasks completed")}${metric("timer", formatMinutes(stats.estimatedMinutes), "Estimated effort")}${metric("flame", stats.currentStreak, "Current streak")}${metric("circle-alert", stats.missedDueDateCount, "Missed due dates")}
     </div>
@@ -159,7 +204,7 @@ function renderPlay(): void {
   const completedTasks = data.tasks.filter((task) => completedIds.has(task.id));
   const daily = [...pending, ...completedTasks];
   const progress = daily.length ? Math.round(completedTasks.length / daily.length * 100) : 100;
-  byId("app-content").innerHTML = `<div class="play-layout"><canvas id="game-canvas" class="game-scene" aria-label="Floating island cleanup, ${completedTasks.length} of ${daily.length} tasks complete"></canvas><div class="game-hud"><div class="game-score"><strong>${completedTasks.length}/${daily.length}</strong><span>${daily.length ? "island tasks complete" : "a clean start"}</span><div class="game-progress"><span style="--progress:${progress}%"></span></div></div></div><section class="game-tasks"><div class="section-heading"><div><h2>${pending.length ? "Today's cleanup" : "Island restored"}</h2><p>${pending.length ? `${pending.length} task${pending.length === 1 ? "" : "s"} left to clear the island.` : "Nothing else is due today."}</p></div></div>${pending.length ? `<div class="task-list">${pending.map((task) => taskRow(task)).join("")}</div>` : ""}${completedToday.length ? `<div class="section-heading" style="margin-top:22px"><div><h2>Completed</h2></div></div><div class="task-list">${completedToday.map((completion) => { const task = data.tasks.find((item) => item.id === completion.taskId); return task ? `<article class="task-row"><div class="complete-button"><i data-lucide="check"></i></div><div class="task-main"><div class="task-name">${escape(task.name)}</div><div class="task-meta"><span>${escape(roomFor(task)?.name ?? "")}</span></div></div><button class="button secondary" data-action="undo" data-id="${completion.id}"><i data-lucide="rotate-ccw"></i>Undo</button></article>` : ""; }).join("")}</div>` : ""}</section></div>`;
+  byId("app-content").innerHTML = `<div class="play-layout"><canvas id="game-canvas" class="game-scene" aria-label="Floating island cleanup, ${completedTasks.length} of ${daily.length} tasks complete"></canvas><div class="game-hud"><div class="game-score"><strong>${completedTasks.length}/${daily.length}</strong><span>${daily.length ? "island tasks complete" : "a clean start"}</span><div class="game-progress"><span style="--progress:${progress}%"></span></div></div></div><section class="game-tasks"><div class="section-heading"><div><h2>${pending.length ? "Today's cleanup" : "Island restored"}</h2><p>${pending.length ? `${pending.length} task${pending.length === 1 ? "" : "s"} left to clear the island.` : "Nothing else is due today."}</p></div></div>${pending.length ? `<div class="task-list">${pending.map((task) => taskRow(task)).join("")}</div>` : ""}${completedToday.length ? `<div class="section-heading" style="margin-top:22px"><div><h2>Completed</h2></div></div><div class="task-list">${completedToday.map((completion) => { const task = data.tasks.find((item) => item.id === completion.taskId); const profile = data.profiles.find((item) => item.id === completion.profileId); return task ? `<article class="task-row"><div class="complete-button"><i data-lucide="check"></i></div><div class="task-main"><div class="task-name">${escape(task.name)}</div><div class="task-meta"><span>${escape(roomFor(task)?.name ?? "")}</span>${profile ? `<span><i data-lucide="user-round"></i>${escape(profile.name)}</span>` : ""}</div></div><button class="button secondary" data-action="undo" data-id="${completion.id}"><i data-lucide="rotate-ccw"></i>Undo</button></article>` : ""; }).join("")}</div>` : ""}</section></div>`;
   const canvas = byId<HTMLCanvasElement>("game-canvas");
   void import("./game").then((module) => {
     gameModule = module;
@@ -169,15 +214,49 @@ function renderPlay(): void {
 
 function renderSettings(): void {
   const notificationState = "Notification" in window ? Notification.permission : "unsupported";
+  const connection = syncDetails.connection;
+  const syncDescription = connection
+    ? `An offline copy is stored in this browser and synchronized to PostgreSQL on ${escape(connection.serverName)}.`
+    : "Your plan is stored only in this browser until you connect it to your nesti. server.";
+  const lastSync = connection?.lastSyncedAt ? new Date(connection.lastSyncedAt).toLocaleString() : "Not yet";
   byId("app-content").innerHTML = `<div class="settings-layout"><div>
     <section><div class="section-heading"><div><h2>Home</h2><p>Name and organize your local plan.</p></div></div><div class="settings-section"><div class="setting-row"><div><h3>Home name</h3><p>Used when exporting your complete plan.</p></div><input id="home-name-input" value="${escape(data.settings.homeName)}" maxlength="120" aria-label="Home name" /></div></div></section>
+    <section style="margin-top:30px"><div class="section-heading"><div><h2>Profiles</h2><p>Choose who is completing tasks.</p></div><button class="button secondary" data-action="add-profile"><i data-lucide="plus"></i>Add profile</button></div><div class="profile-list">${data.profiles.map((profile) => `<article class="profile-row"><span class="profile-swatch" style="--profile-color:${escape(profile.color)}"></span><div><strong>${escape(profile.name)}</strong><small>${profile.id === data.settings.activeProfileId ? "Active profile" : "Shared household member"}</small></div><div class="room-actions"><button class="icon-button" data-action="edit-profile" data-id="${profile.id}" aria-label="Edit ${escape(profile.name)}"><i data-lucide="pencil"></i></button><button class="icon-button danger" data-action="delete-profile" data-id="${profile.id}" aria-label="Remove ${escape(profile.name)}" ${data.profiles.length <= 1 ? "disabled" : ""}><i data-lucide="trash-2"></i></button></div></article>`).join("")}</div></section>
     <section style="margin-top:30px"><div class="section-heading"><div><h2>Rooms</h2><p>${data.rooms.length} room${data.rooms.length === 1 ? "" : "s"}</p></div><button class="button secondary" data-action="add-room"><i data-lucide="plus"></i>Add room</button></div><div class="room-list">${data.rooms.map((room) => { const count = data.tasks.filter((task) => task.roomId === room.id).length; return `<article class="room-row"><span class="room-icon"><i data-lucide="door-open"></i></span><div><strong>${escape(room.name)}</strong><small>${count} task${count === 1 ? "" : "s"}${room.notes ? ` · ${escape(room.notes)}` : ""}</small></div><div class="room-actions"><button class="icon-button" data-action="export-room" data-id="${room.id}" aria-label="Export ${escape(room.name)}"><i data-lucide="download"></i></button><button class="icon-button" data-action="edit-room" data-id="${room.id}" aria-label="Edit ${escape(room.name)}"><i data-lucide="pencil"></i></button><button class="icon-button danger" data-action="delete-room" data-id="${room.id}" aria-label="Delete ${escape(room.name)}"><i data-lucide="trash-2"></i></button></div></article>`; }).join("") || `<p class="summary-line">No rooms yet.</p>`}</div></section>
     <section style="margin-top:30px"><div class="section-heading"><div><h2>Plan files</h2><p>Move plans between nesti. apps.</p></div></div><div class="settings-section"><div class="setting-row"><div><h3>Import .nesti plan</h3><p>Valid plans append after your confirmation.</p></div><button class="button secondary" data-action="import"><i data-lucide="upload"></i>Import</button></div><div class="setting-row"><div><h3>Export entire home</h3><p>Download a portable version 1 plan.</p></div><button class="button secondary" data-action="export" ${data.rooms.length ? "" : "disabled"}><i data-lucide="download"></i>Export</button></div></div></section>
-  </div><aside><div class="storage-panel"><i data-lucide="shield-check"></i><h2>Private by design</h2><p>Your plan and history are stored in this browser. nesti. has no account, analytics, or remote database.</p><button class="button secondary" data-action="notifications"><i data-lucide="${notificationState === "granted" ? "bell" : "bell-off"}"></i>${notificationState === "granted" ? "Reminders enabled" : notificationState === "unsupported" ? "Reminders unavailable" : "Enable reminders"}</button></div><div class="settings-section" style="margin-top:22px"><div class="setting-row"><div><h3>File format</h3><p>.nesti compatibility</p></div><strong>Version 1</strong></div><div class="setting-row"><div><h3>Delete local data</h3><p>This cannot be undone.</p></div><button class="button danger" data-action="reset">Delete</button></div></div></aside></div>`;
+    ${syncDetails.conflicts.length ? `<section style="margin-top:30px"><div class="section-heading"><div><h2>Sync conflicts</h2><p>Choose which version to keep.</p></div></div><div class="settings-section">${syncDetails.conflicts.map((conflict) => `<div class="setting-row"><div><h3>${escape(conflict.entityType)} changed in two places</h3><p>${escape(conflict.reason.replaceAll("_", " "))}</p></div><div class="inline-actions"><button class="button secondary" data-action="resolve-server" data-id="${conflict.id}">Use server</button>${conflict.reason !== "deleted" ? `<button class="button primary" data-action="resolve-local" data-id="${conflict.id}">Keep this device</button>` : ""}</div></div>`).join("")}</div></section>` : ""}
+  </div><aside><div class="storage-panel"><i data-lucide="${connection ? "database" : "cloud-off"}"></i><h2>${connection ? "PostgreSQL home" : "Server unavailable"}</h2><p>${syncDescription}</p><div class="storage-facts"><span>${escape(syncRuntime.message)}</span>${connection ? `<span>Last saved: ${escape(lastSync)}</span><span>${syncDetails.pending} pending change${syncDetails.pending === 1 ? "" : "s"}</span>` : ""}</div>${connection ? `<button class="button secondary" data-action="sync-now"><i data-lucide="refresh-cw"></i>Save now</button>` : `<button class="button secondary" data-action="sync-connect"><i data-lucide="refresh-cw"></i>Retry server</button>`}<button class="button secondary" data-action="notifications"><i data-lucide="${notificationState === "granted" ? "bell" : "bell-off"}"></i>${notificationState === "granted" ? "Reminders enabled" : notificationState === "unsupported" ? "Reminders unavailable" : "Enable reminders"}</button></div><div class="settings-section" style="margin-top:22px"><div class="setting-row"><div><h3>File format</h3><p>.nesti compatibility</p></div><strong>Version 1</strong></div><div class="setting-row"><div><h3>Delete local data</h3><p>This cannot be undone.</p></div><button class="button danger" data-action="reset">Delete</button></div></div></aside></div>`;
   byId<HTMLInputElement>("home-name-input").addEventListener("change", async (event) => {
     const homeName = (event.target as HTMLInputElement).value.trim() || "My Home";
     await saveSettings({ id: "settings", homeName }); await refresh("Home name saved");
   });
+}
+
+function openProfileDialog(profile?: ProfileRecord): void {
+  const form = byId<HTMLFormElement>("profile-form");
+  form.reset();
+  (form.elements.namedItem("id") as HTMLInputElement).value = profile?.id ?? "";
+  (form.elements.namedItem("name") as HTMLInputElement).value = profile?.name ?? "";
+  (form.elements.namedItem("color") as HTMLInputElement).value = profile?.color ?? "#147d64";
+  byId("profile-dialog-title").textContent = profile ? "Edit profile" : "New profile";
+  byId<HTMLDialogElement>("profile-dialog").showModal();
+  setTimeout(() => (form.elements.namedItem("name") as HTMLInputElement).focus(), 0);
+}
+
+async function submitProfile(): Promise<void> {
+  const form = byId<HTMLFormElement>("profile-form");
+  if (!form.reportValidity()) return;
+  const values = new FormData(form);
+  const id = String(values.get("id") || crypto.randomUUID());
+  const existing = data.profiles.find((profile) => profile.id === id);
+  await saveProfile({
+    id,
+    name: String(values.get("name")).trim(),
+    color: String(values.get("color")),
+    sortOrder: existing?.sortOrder ?? data.profiles.length
+  });
+  byId<HTMLDialogElement>("profile-dialog").close();
+  await refresh(existing ? "Profile updated" : "Profile added");
 }
 
 function openRoomDialog(room?: RoomRecord, note?: string): void {

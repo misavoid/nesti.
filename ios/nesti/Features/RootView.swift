@@ -4,6 +4,7 @@ import SwiftData
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(SyncCoordinator.self) private var syncCoordinator
     @Query private var allTasks: [CleaningTask]
     @Query private var completions: [CompletionRecord]
     @State private var selectedTab = 1
@@ -32,6 +33,22 @@ struct RootView: View {
         .onChange(of: scenePhase, initial: true) {
             guard scenePhase == .active else { return }
             WidgetSnapshotPublisher.publish(tasks: allTasks, completions: completions)
+            SyncOutbox.ensureDefaultProfile(in: context)
+            Task { try? await syncCoordinator.syncNow() }
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(30))
+                    try Task.checkCancellation()
+                    try await syncCoordinator.syncNow()
+                } catch is CancellationError {
+                    return
+                } catch {
+                    // The coordinator exposes the failure in its observable status.
+                }
+            }
         }
         .sheet(item: $importDocument) { document in
             ImportPreviewView(document: document) {
