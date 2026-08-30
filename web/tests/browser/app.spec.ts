@@ -55,9 +55,8 @@ test("shows when browser data is committed to PostgreSQL", async ({ page }, test
   } }));
   await page.route("**/api/sync/v1/sync", (route) => route.fulfill({ json: { protocolVersion: 1, cursor: "2", hasMore: false, acknowledgements: [], conflicts: [], changes: [] } }));
   await page.getByRole("button", { name: "Settings" }).last().click();
-  await page.getByRole("button", { name: "Connect this browser" }).click();
-  await expect(page.getByRole("heading", { name: "Saved to your server" })).toBeVisible();
-  await expect(page.locator("#sync-indicator").getByText(/Saved to PostgreSQL on Home Server/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "PostgreSQL home" })).toBeVisible();
+  await expect(page.locator("#sync-indicator").getByText(/Loaded from PostgreSQL on Home Server/)).toBeVisible();
 });
 
 test("connects another browser without a pairing code", async ({ page }, testInfo) => {
@@ -72,8 +71,7 @@ test("connects another browser without a pairing code", async ({ page }, testInf
   } }));
   await page.route("**/api/sync/v1/sync", (route) => route.fulfill({ json: { protocolVersion: 1, cursor: "1", hasMore: false, acknowledgements: [], conflicts: [], changes: [] } }));
   await page.getByRole("button", { name: "Settings" }).last().click();
-  await page.getByRole("button", { name: "Connect this browser" }).click();
-  await expect(page.getByRole("heading", { name: "Saved to your server" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "PostgreSQL home" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("open-enrollment.png"), fullPage: true });
 });
 

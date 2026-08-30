@@ -11,7 +11,9 @@ export interface PairSession {
 
 let runtimeStatus: RuntimeSyncStatus = { phase: "local", message: "Saved in this browser" };
 let activeSync: Promise<void> | undefined;
+let activeReconcile: Promise<void> | undefined;
 let retryTimer: number | undefined;
+let serviceStarted = false;
 const listeners = new Set<(status: RuntimeSyncStatus) => void>();
 
 function publish(status: RuntimeSyncStatus): void {
@@ -31,8 +33,12 @@ function api(serverUrl: string, path: string): string {
 
 async function responseJson<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => undefined) as { error?: { message?: string } } | undefined;
-  if (!response.ok) throw new Error(body?.error?.message ?? `The sync server returned ${response.status}.`);
+  if (!response.ok) throw new SyncHttpError(response.status, body?.error?.message ?? `The sync server returned ${response.status}.`);
   return body as T;
+}
+
+class SyncHttpError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
 }
 
 export async function enrollWithServer(homeName: string, deviceName: string, serverUrl = location.origin): Promise<PairSession> {
@@ -75,15 +81,57 @@ export async function finishPairing(session: PairSession, mode: "use-local" | "u
   await syncNow();
 }
 
-export async function uploadBrowserCopy(): Promise<void> {
-  const state = await syncState();
-  if (!state.connection) throw new Error("Connect this browser before uploading its copy.");
-  const remote = await responseJson<ServerSnapshot>(await fetch(api(state.connection.serverUrl, "/snapshot"), {
+async function serverSnapshot(connection: SyncConnection): Promise<ServerSnapshot> {
+  return responseJson<ServerSnapshot>(await fetch(api(connection.serverUrl, "/snapshot"), {
     cache: "no-store",
-    headers: { Authorization: `Bearer ${state.connection.token}` }
+    headers: { Authorization: `Bearer ${connection.token}` }
   }));
-  await connectToSnapshot({ ...state.connection, cursor: remote.cursor }, remote, "use-local");
-  await syncNow();
+}
+
+export async function reconcileHostedCopy(homeName: string): Promise<void> {
+  if (activeReconcile) return activeReconcile;
+  activeReconcile = performReconcile(homeName).finally(() => { activeReconcile = undefined; });
+  return activeReconcile;
+}
+
+async function performReconcile(homeName: string): Promise<void> {
+  publish({ phase: "connecting", message: "Loading from PostgreSQL" });
+  let state = await syncState();
+  let connection = state.connection;
+  let remote: ServerSnapshot;
+  if (connection) {
+    try {
+      remote = await serverSnapshot(connection);
+    } catch (error) {
+      if (!(error instanceof SyncHttpError) || error.status !== 401) throw error;
+      connection = undefined;
+      const session = await enrollWithServer(homeName, "Web browser", location.origin);
+      connection = session.connection;
+      remote = session.snapshot;
+    }
+  } else {
+    const session = await enrollWithServer(homeName, "Web browser", location.origin);
+    connection = session.connection;
+    remote = session.snapshot;
+  }
+
+  const localHasData = await hasLocalPlan();
+  const serverHasData = remote.rooms.length > 0 || remote.tasks.length > 0 || remote.completions.length > 0;
+  if (localHasData && !serverHasData) {
+    await connectToSnapshot({ ...connection, cursor: remote.cursor }, remote, "use-local");
+    await syncNow();
+  } else {
+    if (state.connection) {
+      await syncNow();
+      state = await syncState();
+      if (state.connection) {
+        connection = state.connection;
+        remote = await serverSnapshot(connection);
+      }
+    }
+    await connectToSnapshot({ ...connection, cursor: remote.cursor }, remote, "use-server");
+    publish({ phase: "synced", message: `Loaded from PostgreSQL on ${connection.serverName}` });
+  }
 }
 
 export async function cancelPairing(session: PairSession): Promise<void> {
@@ -160,14 +208,24 @@ export async function disconnectFromServer(): Promise<void> {
   publish({ phase: "local", message: "Saved in this browser" });
 }
 
-export async function startSyncService(): Promise<void> {
-  const state = await syncState();
-  if (!state.connection) publish({ phase: "local", message: "Saved in this browser" });
-  else if (state.conflicts.length) publish({ phase: "attention", message: `${state.conflicts.length} sync conflicts` });
-  else publish({ phase: state.pending ? "pending" : "synced", message: state.pending ? `${state.pending} changes waiting for server` : `Saved to PostgreSQL on ${state.connection.serverName}` });
-  window.addEventListener("online", () => void syncNow().catch(() => undefined));
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") void syncNow().catch(() => undefined); });
-  await syncNow().catch(() => undefined);
+export async function startSyncService(homeName = "My Home"): Promise<void> {
+  if (!serviceStarted) {
+    serviceStarted = true;
+    window.addEventListener("online", () => void reconcileHostedCopy(homeName).catch(() => undefined));
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") void reconcileHostedCopy(homeName).catch(() => undefined); });
+    window.setInterval(() => {
+      if (document.visibilityState === "visible" && navigator.onLine) void reconcileHostedCopy(homeName).catch(() => undefined);
+    }, 30_000);
+  }
+  try {
+    await reconcileHostedCopy(homeName);
+  } catch (error) {
+    const state = await syncState();
+    publish({
+      phase: navigator.onLine ? "error" : "offline",
+      message: navigator.onLine ? (error instanceof Error ? error.message : "Could not load PostgreSQL data") : (state.connection ? "Offline copy is available" : "Server unavailable")
+    });
+  }
 }
 
 export async function hasLocalPlan(): Promise<boolean> {

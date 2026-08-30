@@ -71,7 +71,7 @@ Traefik discovers the `nesti` routers through Docker labels, uses the existing `
 
 The one-shot `init-secrets` service provisions persistent credentials, and `migrate` owns schema changes and provisions the least-privilege `nesti_api` database role. The `sync-api` service starts only after migrations succeed. PostgreSQL is attached only to the internal `sync-data` network and stores its files in the `nesti-db-v2` named volume.
 
-The Compose stack enables open enrollment because this deployment resolves to a private-network address. In Settings, select **Connect this browser**; additional web and iOS devices connect directly with the same server URL. Any device that can reach the server can join the home, so do not expose this configuration directly to the public internet.
+The Compose stack enables open enrollment because this deployment resolves to a private-network address. The web app connects automatically and treats PostgreSQL as authoritative whenever the server is reachable; IndexedDB is only its offline cache. On first upgrade, a browser that still has a local plan will seed an empty PostgreSQL home automatically. Additional web and iOS devices connect directly with the same server URL. Any device that can reach the server can join the home, so do not expose this configuration directly to the public internet.
 
 The equivalent administration commands remain available for recovery and scripted deployments:
 
