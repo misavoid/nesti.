@@ -4,7 +4,6 @@ import SceneKit
 final class CharacterController {
     enum State {
         case idle
-        case wander
         case walkingToTrash
         case pickingUp
         case celebrating
@@ -19,13 +18,13 @@ final class CharacterController {
     private let character: GameCharacter
     private weak var sceneRoot: SCNNode?
     private var pickups: [Pickup] = []
+    private var worldYaw: Float = 0
     private(set) var state: State = .idle
 
     init(character: GameCharacter, sceneRoot: SCNNode) {
         self.character = character
         self.sceneRoot = sceneRoot
-        startIdleAnimation()
-        startWandering()
+        resetCharacterPose()
     }
 
     func enqueuePickup(trash: SCNNode, allClear: Bool, completion: @escaping () -> Void) {
@@ -33,53 +32,20 @@ final class CharacterController {
         runNextPickupIfNeeded()
     }
 
-    private func startIdleAnimation() {
-        let breathe = SCNAction.sequence([
-            .scale(to: 1.025, duration: 0.85),
-            .scale(to: 1.0, duration: 0.85)
-        ])
-        breathe.timingMode = .easeInEaseOut
-        character.body.runAction(.repeatForever(breathe), forKey: "breathe")
-
-        let look = SCNAction.sequence([
-            .rotateBy(x: 0, y: 0.12, z: 0.03, duration: 1.2),
-            .wait(duration: 0.8),
-            .rotateBy(x: 0, y: -0.24, z: -0.06, duration: 1.6),
-            .wait(duration: 0.7),
-            .rotateBy(x: 0, y: 0.12, z: 0.03, duration: 1.2)
-        ])
-        character.head.runAction(.repeatForever(look), forKey: "look")
-    }
-
-    private func startWandering() {
-        guard pickups.isEmpty else { return }
-        state = .wander
-        let destinations = [
-            SCNVector3(0.62, 0.45, 0.48),
-            SCNVector3(0.98, 0.45, -0.15),
-            SCNVector3(0.18, 0.45, -0.48),
-            SCNVector3(-0.15, 0.45, 0.35)
-        ]
-        var actions: [SCNAction] = []
-        var previous = character.root.position
-        for destination in destinations {
-            actions.append(faceAction(from: previous, to: destination))
-            actions.append(walkAction(to: destination, duration: 1.65))
-            actions.append(.wait(duration: 0.9))
-            previous = destination
-        }
-        character.root.runAction(.repeatForever(.sequence(actions)), forKey: "wander")
+    func updateWorldYaw(_ yaw: Float) {
+        worldYaw = yaw
+        guard state == .idle else { return }
+        character.root.eulerAngles = SCNVector3(0, character.idleYaw - worldYaw, 0)
     }
 
     private func runNextPickupIfNeeded() {
         guard state != .walkingToTrash, state != .pickingUp, state != .celebrating,
               let pickup = pickups.first else { return }
         pickups.removeFirst()
-        character.root.removeAction(forKey: "wander")
         stopWalkingLimbs()
         state = .walkingToTrash
 
-        let destination = SCNVector3(pickup.trash.position.x, 0.45, pickup.trash.position.z + 0.30)
+        let destination = pickupDestination(for: pickup.trash.position)
         let face = faceAction(from: character.root.position, to: destination)
         startWalkingLimbs()
         character.root.runAction(.sequence([
@@ -99,13 +65,17 @@ final class CharacterController {
         let bend = SCNAction.moveBy(x: 0, y: -0.20, z: 0, duration: 0.18)
         bend.timingMode = .easeInEaseOut
         let rise = bend.reversed()
-        let reach = SCNAction.rotateTo(x: -0.72, y: 0, z: -0.22, duration: 0.18, usesShortestUnitArc: true)
-        let unreach = SCNAction.rotateTo(x: 0, y: 0, z: 0, duration: 0.18, usesShortestUnitArc: true)
+        let reach = SCNAction.rotateTo(x: -1.15, y: 0, z: -0.70, duration: 0.20, usesShortestUnitArc: true)
+        let unreach = SCNAction.rotateTo(x: 0, y: 0, z: -0.18, duration: 0.20, usesShortestUnitArc: true)
 
         character.rightArm.runAction(.sequence([reach, .wait(duration: 0.12), unreach]))
         pickup.trash.runAction(.sequence([
             .wait(duration: 0.18),
-            .group([.scale(to: 0.01, duration: 0.25), .fadeOut(duration: 0.25)]),
+            .group([
+                .moveBy(x: 0.16, y: 0.55, z: 0.10, duration: 0.28),
+                .scale(to: 0.01, duration: 0.28),
+                .fadeOut(duration: 0.28)
+            ]),
             .run { [weak self] node in
                 let position = node.position
                 Task { @MainActor in self?.showSparkles(at: position) }
@@ -122,10 +92,12 @@ final class CharacterController {
                     guard let self else { return }
                     if pickup.allClear {
                         self.celebrate()
+                    } else if self.pickups.isEmpty {
+                        self.state = .idle
+                        self.resetCharacterPose()
                     } else {
                         self.state = .idle
                         self.runNextPickupIfNeeded()
-                        if self.pickups.isEmpty { self.startWandering() }
                     }
                 }
             }
@@ -145,9 +117,13 @@ final class CharacterController {
             .run { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
-                    self.state = .idle
-                    self.runNextPickupIfNeeded()
-                    if self.pickups.isEmpty { self.startWandering() }
+                    if self.pickups.isEmpty {
+                        self.state = .idle
+                        self.resetCharacterPose()
+                    } else {
+                        self.state = .idle
+                        self.runNextPickupIfNeeded()
+                    }
                 }
             }
         ]), forKey: "celebrate")
@@ -165,9 +141,11 @@ final class CharacterController {
     private func stopWalkingLimbs() {
         for node in [character.leftLeg, character.rightLeg] { node.removeAction(forKey: "step") }
         for node in [character.leftArm, character.rightArm] { node.removeAction(forKey: "swing") }
-        for node in [character.leftLeg, character.rightLeg, character.leftArm, character.rightArm] {
+        for node in [character.leftLeg, character.rightLeg] {
             node.runAction(.rotateTo(x: 0, y: 0, z: 0, duration: 0.12, usesShortestUnitArc: true))
         }
+        character.leftArm.runAction(.rotateTo(x: 0, y: 0, z: 0.18, duration: 0.12, usesShortestUnitArc: true))
+        character.rightArm.runAction(.rotateTo(x: 0, y: 0, z: -0.18, duration: 0.12, usesShortestUnitArc: true))
     }
 
     private func walkAction(to destination: SCNVector3, duration: TimeInterval) -> SCNAction {
@@ -185,6 +163,27 @@ final class CharacterController {
         let action = SCNAction.rotateTo(x: 0, y: CGFloat(angle), z: 0, duration: 0.18, usesShortestUnitArc: true)
         action.timingMode = .easeInEaseOut
         return action
+    }
+
+    private func pickupDestination(for trashPosition: SCNVector3) -> SCNVector3 {
+        let destination = SCNVector3(trashPosition.x - 0.16, 0.45, trashPosition.z + 0.12)
+        if destination.x > -2.12 && destination.x < -0.34 && destination.z > -1.58 && destination.z < 0.22 {
+            return CharacterFactory.homePosition
+        }
+        return destination
+    }
+
+    private func resetCharacterPose() {
+        character.root.removeAllActions()
+        character.body.removeAllActions()
+        character.head.removeAllActions()
+        character.root.position = CharacterFactory.homePosition
+        character.root.eulerAngles = SCNVector3(0, character.idleYaw - worldYaw, 0)
+        character.head.eulerAngles = SCNVector3Zero
+        character.leftArm.eulerAngles = SCNVector3(0, 0, 0.18)
+        character.rightArm.eulerAngles = SCNVector3(0, 0, -0.18)
+        character.leftLeg.eulerAngles = SCNVector3(0, 0, 0.08)
+        character.rightLeg.eulerAngles = SCNVector3(0, 0, -0.08)
     }
 
     private func showSparkles(at position: SCNVector3) {

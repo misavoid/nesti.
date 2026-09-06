@@ -63,19 +63,41 @@ final class GameWorldState {
         let seed = taskID.uuidString.utf8.reduce(UInt64(1_469_598_103_934_665_603)) {
             ($0 ^ UInt64($1)) &* 1_099_511_628_211
         }
-        let goldenAngle = Float.pi * (3 - sqrt(5))
-        let ring = min(0.82, 0.28 + sqrt(Float(index + 1)) * 0.14)
-        let angle = Float(index) * goldenAngle + unit(seed, shift: 8) * 0.55
         let kinds = GameTrashKind.allCases
+        let position = trashPosition(for: index, seed: seed)
         return GameTrashState(
             id: taskID,
             taskID: taskID,
             kind: kinds[Int(seed % UInt64(kinds.count))],
-            x: cos(angle) * ring * 2.55,
-            z: sin(angle) * ring * 1.85,
+            x: position.x,
+            z: position.z,
             rotation: unit(seed, shift: 24) * Float.pi * 2,
             isRemoved: false
         )
+    }
+
+    private func trashPosition(for index: Int, seed: UInt64) -> (x: Float, z: Float) {
+        let goldenAngle = Float.pi * (3 - sqrt(5))
+        var accepted = -1
+        for candidate in 0..<260 {
+            let ring = min(0.92, 0.22 + sqrt(Float(candidate + 1)) * 0.115)
+            let angle = Float(candidate) * goldenAngle + 0.3 + unit(seed, shift: 8) * 0.08
+            let x = cos(angle) * ring * 2.55
+            let z = sin(angle) * ring * 1.82
+            guard isValidTrashPosition(x: x, z: z) else { continue }
+            accepted += 1
+            if accepted == index { return (x, z) }
+        }
+        let angle = Float(index) * goldenAngle
+        return (cos(angle) * 1.95, sin(angle) * 1.35)
+    }
+
+    private func isValidTrashPosition(x: Float, z: Float) -> Bool {
+        let insideHouseBuffer = x > -2.08 && x < -0.42 && z > -1.50 && z < 0.12
+        let nearHelper = hypot(x - CharacterFactory.homePosition.x, z - CharacterFactory.homePosition.z) < 0.58
+        let likelyHousePath = x < -0.40 && z < 0.18
+        let nearPond = hypot(x - 0.65, z - 1.42) < 0.42
+        return !insideHouseBuffer && !nearHelper && !likelyHousePath && !nearPond
     }
 
     private func unit(_ seed: UInt64, shift: UInt64) -> Float {

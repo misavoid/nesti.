@@ -19,6 +19,8 @@ struct IslandSceneView: UIViewRepresentable {
         view.antialiasingMode = .multisampling4X
         view.allowsCameraControl = false
         view.rendersContinuously = isActive
+        let rotateGesture = UIPanGestureRecognizer(target: context.coordinator, action: #selector(GameCoordinator.handleWorldRotation(_:)))
+        view.addGestureRecognizer(rotateGesture)
         context.coordinator.update(with: snapshot)
         return view
     }

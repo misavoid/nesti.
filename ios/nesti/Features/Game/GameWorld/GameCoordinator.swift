@@ -1,18 +1,23 @@
 import SceneKit
+import UIKit
 
 @MainActor
-final class GameCoordinator {
+final class GameCoordinator: NSObject {
     let scene: SCNScene
+    private let worldRoot: SCNNode
     private let characterController: CharacterController
     private var trashNodes: [UUID: SCNNode] = [:]
     private var snapshot: GameWorldSnapshot?
 
-    init() {
+    override init() {
         let scene = IslandBuilder.makeScene()
+        let worldRoot = scene.rootNode.childNode(withName: IslandBuilder.worldNodeName, recursively: false) ?? scene.rootNode
         let character = CharacterFactory.make()
-        scene.rootNode.addChildNode(character.root)
+        worldRoot.addChildNode(character.root)
         self.scene = scene
-        self.characterController = CharacterController(character: character, sceneRoot: scene.rootNode)
+        self.worldRoot = worldRoot
+        self.characterController = CharacterController(character: character, sceneRoot: worldRoot)
+        super.init()
     }
 
     func update(with newSnapshot: GameWorldSnapshot) {
@@ -25,7 +30,7 @@ final class GameCoordinator {
         for state in newSnapshot.trash where !state.isRemoved && trashNodes[state.taskID] == nil {
             let node = TrashFactory.make(state)
             trashNodes[state.taskID] = node
-            scene.rootNode.addChildNode(node)
+            worldRoot.addChildNode(node)
         }
 
         let validIDs = Set(newSnapshot.trash.map(\.taskID))
@@ -49,5 +54,16 @@ final class GameCoordinator {
             }
         }
         snapshot = newSnapshot
+    }
+
+    @objc func handleWorldRotation(_ recognizer: UIPanGestureRecognizer) {
+        guard let view = recognizer.view else { return }
+        let buttonMask = recognizer.buttonMask
+        if !buttonMask.isEmpty && !buttonMask.contains(.secondary) { return }
+        let translation = recognizer.translation(in: view)
+        guard translation.x != 0 else { return }
+        worldRoot.eulerAngles.y += Float(translation.x) * 0.008
+        characterController.updateWorldYaw(worldRoot.eulerAngles.y)
+        recognizer.setTranslation(.zero, in: view)
     }
 }
