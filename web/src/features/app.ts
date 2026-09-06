@@ -44,7 +44,7 @@ export async function startApp(): Promise<void> {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
   render();
   notifyDueTasks(data);
-  const preload = () => import("./game").then((module) => { gameModule = module; return fetch("/models/FloatingIsland.glb"); }).catch(() => undefined);
+  const preload = () => import("./game").then((module) => { gameModule = module; }).catch(() => undefined);
   if ("requestIdleCallback" in window) window.requestIdleCallback(preload);
   else setTimeout(preload, 1500);
 }

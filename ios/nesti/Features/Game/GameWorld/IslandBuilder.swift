@@ -3,17 +3,22 @@ import UIKit
 
 @MainActor
 enum IslandBuilder {
+    static let worldNodeName = "game-world"
+
     static func makeScene() -> SCNScene {
         let scene = SCNScene()
         scene.background.contents = UIColor(red: 0.98, green: 0.99, blue: 1.0, alpha: 1)
-        scene.rootNode.addChildNode(makeCloud())
-        scene.rootNode.addChildNode(makeIsland())
-        scene.rootNode.addChildNode(makeHouse())
-        addTrees(to: scene.rootNode)
-        addRocksAndFlowers(to: scene.rootNode)
-        addSteppingStonesAndBench(to: scene.rootNode)
-        addPond(to: scene.rootNode)
-        addFenceAndShrubs(to: scene.rootNode)
+        let world = SCNNode()
+        world.name = worldNodeName
+        scene.rootNode.addChildNode(world)
+        world.addChildNode(makeCloud())
+        world.addChildNode(makeIsland())
+        world.addChildNode(makeHouse())
+        addTrees(to: world)
+        addRocksAndFlowers(to: world)
+        addSteppingStonesAndBench(to: world)
+        addPond(to: world)
+        addFenceAndShrubs(to: world)
         addLighting(to: scene.rootNode)
         addCamera(to: scene.rootNode)
         return scene
@@ -113,55 +118,118 @@ enum IslandBuilder {
 
     private static func makeHouse() -> SCNNode {
         let root = SCNNode()
-        root.position = SCNVector3(-1.30, 0.47, -0.82)
+        root.position = SCNVector3(-1.28, 0.47, -0.80)
+        root.eulerAngles.y = 0.08
 
-        let body = SCNBox(width: 1.05, height: 0.82, length: 0.84, chamferRadius: 0.09)
+        let body = SCNBox(width: 1.18, height: 0.86, length: 0.98, chamferRadius: 0.08)
         body.materials = [SceneMaterials.cream]
         let bodyNode = SCNNode(geometry: body)
-        bodyNode.position.y = 0.41
+        bodyNode.position.y = 0.43
         root.addChildNode(bodyNode)
 
-        let gablePath = UIBezierPath()
-        gablePath.move(to: CGPoint(x: -0.52, y: 0))
-        gablePath.addLine(to: CGPoint(x: 0.52, y: 0))
-        gablePath.addLine(to: CGPoint(x: 0, y: 0.48))
-        gablePath.close()
-        let gable = SCNShape(path: gablePath, extrusionDepth: 0.84)
-        gable.materials = [SceneMaterials.cream]
-        let gableNode = SCNNode(geometry: gable)
-        gableNode.position = SCNVector3(0, 0.80, -0.42)
-        root.addChildNode(gableNode)
+        let sideShade = SCNBox(width: 0.04, height: 0.78, length: 0.90, chamferRadius: 0.02)
+        sideShade.materials = [SceneMaterials.wallShade]
+        let sideShadeNode = SCNNode(geometry: sideShade)
+        sideShadeNode.position = SCNVector3(0.61, 0.43, -0.02)
+        root.addChildNode(sideShadeNode)
 
-        let roofAngle = atan2(Float(0.50), Float(0.66))
-        let roofPanelWidth = CGFloat(hypot(Float(0.66), Float(0.50)))
-        for side in [-1.0, 1.0] as [Float] {
-            let panel = SCNBox(width: roofPanelWidth, height: 0.10, length: 1.08, chamferRadius: 0.025)
-            panel.materials = [SceneMaterials.roof]
-            let panelNode = SCNNode(geometry: panel)
-            panelNode.position = SCNVector3(side * 0.33, 1.05, 0)
-            panelNode.eulerAngles.z = -side * roofAngle
-            root.addChildNode(panelNode)
-        }
+        let eave = SCNBox(width: 1.36, height: 0.12, length: 1.16, chamferRadius: 0.025)
+        eave.materials = [SceneMaterials.roofDark]
+        let eaveNode = SCNNode(geometry: eave)
+        eaveNode.position.y = 0.91
+        root.addChildNode(eaveNode)
 
-        let door = SCNBox(width: 0.28, height: 0.48, length: 0.035, chamferRadius: 0.055)
-        door.materials = [SceneMaterials.mintDark]
+        let roof = SCNCone(topRadius: 0, bottomRadius: 0.96, height: 0.72)
+        roof.radialSegmentCount = 4
+        roof.materials = [SceneMaterials.roof]
+        let roofNode = SCNNode(geometry: roof)
+        roofNode.position.y = 1.25
+        roofNode.eulerAngles.y = .pi / 4
+        roofNode.scale = SCNVector3(1.08, 0.92, 0.92)
+        root.addChildNode(roofNode)
+
+        let roofHighlight = SCNCone(topRadius: 0, bottomRadius: 0.58, height: 0.45)
+        roofHighlight.radialSegmentCount = 4
+        roofHighlight.materials = [SceneMaterials.roofLight]
+        let roofHighlightNode = SCNNode(geometry: roofHighlight)
+        roofHighlightNode.position = SCNVector3(-0.12, 1.31, 0.08)
+        roofHighlightNode.eulerAngles.y = .pi / 4
+        roofHighlightNode.scale = SCNVector3(0.78, 0.60, 0.70)
+        root.addChildNode(roofHighlightNode)
+
+        let awning = SCNBox(width: 0.48, height: 0.09, length: 0.18, chamferRadius: 0.018)
+        awning.materials = [SceneMaterials.roofDark]
+        let awningNode = SCNNode(geometry: awning)
+        awningNode.position = SCNVector3(0.02, 0.76, 0.62)
+        awningNode.eulerAngles.x = -0.18
+        root.addChildNode(awningNode)
+
+        let doorPath = UIBezierPath()
+        doorPath.move(to: CGPoint(x: -0.15, y: -0.23))
+        doorPath.addLine(to: CGPoint(x: -0.15, y: 0.08))
+        doorPath.addQuadCurve(to: CGPoint(x: 0, y: 0.23), controlPoint: CGPoint(x: -0.15, y: 0.23))
+        doorPath.addQuadCurve(to: CGPoint(x: 0.15, y: 0.08), controlPoint: CGPoint(x: 0.15, y: 0.23))
+        doorPath.addLine(to: CGPoint(x: 0.15, y: -0.23))
+        doorPath.close()
+        let door = SCNShape(path: doorPath, extrusionDepth: 0.04)
+        door.materials = [SceneMaterials.door]
         let doorNode = SCNNode(geometry: door)
-        doorNode.position = SCNVector3(0.16, 0.25, 0.435)
+        doorNode.position = SCNVector3(0.02, 0.28, 0.51)
         root.addChildNode(doorNode)
 
-        for x in [-0.31, 0.38] as [Float] {
-            let window = SCNBox(width: 0.23, height: 0.22, length: 0.04, chamferRadius: 0.04)
+        let knob = SCNSphere(radius: 0.025)
+        knob.materials = [SceneMaterials.roofLight]
+        let knobNode = SCNNode(geometry: knob)
+        knobNode.position = SCNVector3(0.10, 0.29, 0.56)
+        root.addChildNode(knobNode)
+
+        let step = SCNBox(width: 0.56, height: 0.08, length: 0.28, chamferRadius: 0.025)
+        step.materials = [SceneMaterials.rock]
+        let stepNode = SCNNode(geometry: step)
+        stepNode.position = SCNVector3(0.02, 0.04, 0.66)
+        root.addChildNode(stepNode)
+
+        for x in [-0.34, 0.38] as [Float] {
+            let frame = SCNBox(width: 0.27, height: 0.25, length: 0.045, chamferRadius: 0.025)
+            frame.materials = [SceneMaterials.cream]
+            let frameNode = SCNNode(geometry: frame)
+            frameNode.position = SCNVector3(x, 0.58, 0.515)
+            root.addChildNode(frameNode)
+
+            let window = SCNBox(width: 0.20, height: 0.18, length: 0.05, chamferRadius: 0.018)
             window.materials = [SceneMaterials.glass]
             let windowNode = SCNNode(geometry: window)
-            windowNode.position = SCNVector3(x, 0.55, 0.44)
+            windowNode.position = SCNVector3(x, 0.58, 0.545)
             root.addChildNode(windowNode)
+
+            let mullionV = SCNBox(width: 0.025, height: 0.19, length: 0.055, chamferRadius: 0.005)
+            mullionV.materials = [SceneMaterials.cream]
+            let mullionVNode = SCNNode(geometry: mullionV)
+            mullionVNode.position = SCNVector3(x, 0.58, 0.575)
+            root.addChildNode(mullionVNode)
+
+            let mullionH = SCNBox(width: 0.20, height: 0.022, length: 0.055, chamferRadius: 0.005)
+            mullionH.materials = [SceneMaterials.cream]
+            let mullionHNode = SCNNode(geometry: mullionH)
+            mullionHNode.position = SCNVector3(x, 0.58, 0.58)
+            root.addChildNode(mullionHNode)
         }
 
-        let chimney = SCNBox(width: 0.20, height: 0.48, length: 0.20, chamferRadius: 0.035)
-        chimney.materials = [SceneMaterials.wood]
+        let chimney = SCNBox(width: 0.22, height: 0.50, length: 0.22, chamferRadius: 0.035)
+        chimney.materials = [SceneMaterials.roofDark]
         let chimneyNode = SCNNode(geometry: chimney)
-        chimneyNode.position = SCNVector3(-0.34, 1.22, -0.10)
+        chimneyNode.position = SCNVector3(-0.34, 1.32, -0.16)
         root.addChildNode(chimneyNode)
+
+        for index in 0..<3 {
+            let smoke = SCNSphere(radius: 0.08 + CGFloat(index) * 0.02)
+            smoke.segmentCount = 10
+            smoke.materials = [SceneMaterials.white]
+            let smokeNode = SCNNode(geometry: smoke)
+            smokeNode.position = SCNVector3(-0.43 - Float(index) * 0.08, 1.55 + Float(index) * 0.13, -0.14)
+            smokeNode.scale = SCNVector3(1.1, 0.72, 0.86)
+            root.addChildNode(smokeNode)
+        }
         return root
     }
 
@@ -206,10 +274,10 @@ enum IslandBuilder {
         }
 
         let flowers: [(Float, Float, SCNMaterial)] = [
-            (-0.42, -1.62, SceneMaterials.yellow), (-0.12, -1.70, SceneMaterials.coral),
+            (-0.42, -1.62, SceneMaterials.white), (-0.12, -1.70, SceneMaterials.coral),
             (-2.08, 1.02, SceneMaterials.white), (-1.88, 1.20, SceneMaterials.coral),
-            (1.72, -1.10, SceneMaterials.yellow), (1.96, -0.96, SceneMaterials.white),
-            (1.78, 1.20, SceneMaterials.coral), (-2.22, -0.72, SceneMaterials.yellow)
+            (1.72, -1.10, SceneMaterials.blue), (1.96, -0.96, SceneMaterials.white),
+            (1.78, 1.20, SceneMaterials.coral), (-2.22, -0.72, SceneMaterials.white)
         ]
         for (x, z, material) in flowers {
             root.addChildNode(makeFlower(at: SCNVector3(x, 0.46, z), material: material))
@@ -345,7 +413,7 @@ enum IslandBuilder {
             flower.addChildNode(node)
         }
         let center = SCNSphere(radius: 0.035)
-        center.materials = [SceneMaterials.yellow]
+        center.materials = [SceneMaterials.cream]
         let centerNode = SCNNode(geometry: center)
         centerNode.position.y = 0.07
         flower.addChildNode(centerNode)
